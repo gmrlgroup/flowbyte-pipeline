@@ -1,0 +1,8 @@
+dagster==1.9.11
+dagster-webserver==1.9.11
+dagster-graphql
+dagster-postgres==0.25.11
+flowbyte
+openpyxl
+scipy
+logfire

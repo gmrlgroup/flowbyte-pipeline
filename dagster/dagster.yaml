@@ -1,0 +1,33 @@
+run_queue:
+  max_concurrent_runs: 3
+
+
+storage:
+  postgres:
+    postgres_db:
+      username: 
+        env: DAGSTER_PG_USERNAME
+      password: 
+        env: DAGSTER_PG_PASSWORD
+      hostname: 
+        env: DAGSTER_PG_HOST
+      db_name: 
+        env: DAGSTER_PG_DB
+      port: 
+        env: DAGSTER_PG_PORT
+
+
+# alternatively, `base_dir` can be set to an environment variable
+local_artifact_storage:
+  module: dagster.core.storage.root
+  class: LocalArtifactStorage
+  config:
+    base_dir:
+      env: FS_STORAGE_PATH
+
+run_monitoring:
+  enabled: true
+
+run_retries:
+  enabled: true # Omit this key if using Dagster+, since run retries are enabled by default
+  max_retries: 0
