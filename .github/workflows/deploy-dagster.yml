@@ -54,9 +54,9 @@ jobs:
         shell: cmd
         run: |
           net stop dagster_webserver_flowbyteapp
-          net stop dagster_daemon_cdm-flowbyteapp
+          net stop dagster_daemon_flowbyteapp
 
           xcopy /s /y publish\dagster-0.0.0\* C:\users\${{ secrets.FLOWBYTEAPP_DAGSTER_PATH }}\dagster\
 
-          net start dagster_webserver_flowbyte-app
-          net start dagster_daemon_flowbyte-app
+          net start dagster_webserver_flowbyteapp
+          net start dagster_daemon_flowbyteapp
