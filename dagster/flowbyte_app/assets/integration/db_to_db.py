@@ -89,7 +89,7 @@ def generate_query(table_mapping, field_mappings, incremental_col=None, max_incr
     select_clause = ", ".join(main_columns) #+ attribute_columns)
     
     # Build the FROM clause. We assume that both tables are in the same database
-    query = f"SELECT TOP 100 {select_clause}\n"
+    query = f"SELECT {select_clause}\n"
     query += f"FROM {dest_table} i\n"
 
     if incremental_col:
@@ -107,12 +107,18 @@ def get_max_incremental_value(table_mapping, incremental_col):
     table = table_mapping['destination_table'].iloc[0]
 
     # Create the query to get max incremental value
-    query = f"SELECT MAX({incremental_col}) FROM {table}"
+    query = f"SELECT MAX({incremental_col}) as cdc_key FROM {table}"
+
+    int_columns = [incremental_col]
+
+    sql_destination.connect()
 
     # Get max incremental value
-    max_value = sql_destination.get_data(query, chunksize=1)
+    max_value = sql_destination.get_data(query, integer_columns=int_columns)
 
-    return max_value or 0
+    cdc_key = max_value['cdc_key'].iloc[0]
+
+    return cdc_key or 0
 
 
 @asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="sql", group_name="config", io_manager_key="parquet_io_manager", partitions_def=integration_tables_partitions)
@@ -405,6 +411,10 @@ def add_destination_data(context, get_table_mapping, get_field_mapping, transfor
        
         source_table_name = f"{temp_schema}.{temp_table_name}"
         target_table_name = f"{schema}.{table_name}"
+
+        # truncate data from temp table
+        log.log_info("Truncating Data from Temp Table")
+        sql_destination.truncate_table(schema_name=temp_schema, table_name=temp_table_name)
         
         log.log_info("Inserting Data into Temp Table")
         sql_destination.insert_data(schema=temp_schema, table_name=temp_table_name, insert_records=df, chunksize=10000)
@@ -416,9 +426,7 @@ def add_destination_data(context, get_table_mapping, get_field_mapping, transfor
         log.log_info("Updating Data in Target Table")
         sql_destination.upsert_from_table(df=df, target_table=target_table_name, source_table=source_table_name, key_columns=primary_keys, delete_not_matched=False)
 
-        # truncate data from temp table
-        log.log_info("Truncating Data from Temp Table")
-        sql_destination.truncate_table(schema_name=temp_schema, table_name=temp_table_name)
+        
 
     else:
         log.log_info("Inserting Data into Table")
@@ -466,6 +474,10 @@ def add_destination_attributes(context, get_table_mapping, get_field_mapping, ad
        
         source_table_name = f"{temp_schema}.{temp_table_name}"
         target_table_name = f"{schema}.{table_name}"
+
+        # truncate data from temp table
+        log.log_info("Truncating Data from Temp Table")
+        sql_destination.truncate_table(schema_name=temp_schema, table_name=temp_table_name)
         
         log.log_info("Inserting Data into Temp Table")
         sql_destination.insert_data(schema=temp_schema, table_name=temp_table_name, insert_records=df, chunksize=10000)
@@ -477,9 +489,7 @@ def add_destination_attributes(context, get_table_mapping, get_field_mapping, ad
         log.log_info("Updating Data in Target Table")
         sql_destination.upsert_from_table(df=df, target_table=target_table_name, source_table=source_table_name, key_columns=primary_keys, delete_not_matched=False)
 
-        # truncate data from temp table
-        log.log_info("Truncating Data from Temp Table")
-        sql_destination.truncate_table(schema_name=temp_schema, table_name=temp_table_name)
+        
 
     else:
         log.log_info("Inserting Data into Table")
