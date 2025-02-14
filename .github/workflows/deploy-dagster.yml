@@ -43,7 +43,7 @@ jobs:
       - name: Copy Files
         shell: cmd
         run: |
-          tar -xvf dagster/dist/dagster-0.0.0.tar.gz -C publish-dagster
+          tar -xvf dagster/dist/dagster-0.0.0.tar.gz -C publish
 
   deploy:
     runs-on: spinbiapps
@@ -56,7 +56,7 @@ jobs:
           net stop dagster_webserver_flowbyteapp
           net stop dagster_daemon_cdm-flowbyteapp
 
-          xcopy /s /y publish-dagster\dagster-0.0.0\* C:\users\${{ secrets.FLOWBYTEAPP_DAGSTER_PATH }}\dagster\
+          xcopy /s /y publish\dagster-0.0.0\* C:\users\${{ secrets.FLOWBYTEAPP_DAGSTER_PATH }}\dagster\
 
           net start dagster_webserver_flowbyte-app
           net start dagster_daemon_flowbyte-app
