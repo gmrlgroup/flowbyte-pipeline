@@ -1,0 +1,62 @@
+name: Deploy Dagster
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    # Only trigger the workflow if changes occur in the 'jobs' folder (including all subfolders and files)
+    paths:
+      - 'dagster/**'
+
+jobs:
+  build:
+    runs-on: spinbiapps
+
+    steps:
+      - uses: actions/checkout@v2
+
+      # - name: Set up Python
+      #   uses: actions/setup-python@v4
+      #   with:
+      #     python-version: '3.10'
+      - name: Create publish folder
+        shell: cmd
+        run: |
+          mkdir publish
+          
+      # - name: Install dependencies
+      #   shell: pwsh
+      #   run: |
+      #     python -m venv jobs/.env
+      #     jobs/.env/Scripts/Activate
+      #     python -m pip install --upgrade pip
+      #     pip install -r jobs/requirements.txt
+
+
+      - name: Build
+        shell: cmd
+        run: |
+          python -m build dagster/
+          
+          
+      - name: Copy Files
+        shell: cmd
+        run: |
+          tar -xvf dagster/dist/dagster-0.0.0.tar.gz -C publish-dagster
+
+  deploy:
+    runs-on: spinbiapps
+    needs: build
+
+    steps:
+      - name: Deploy to Server
+        shell: cmd
+        run: |
+          net stop dagster_webserver_flowbyteapp
+          net stop dagster_daemon_cdm-flowbyteapp
+
+          xcopy /s /y publish-dagster\dagster-0.0.0\* C:\users\${{ secrets.FLOWBYTEAPP_DAGSTER_PATH }}\dagster\
+
+          net start dagster_webserver_flowbyte-app
+          net start dagster_daemon_flowbyte-app
