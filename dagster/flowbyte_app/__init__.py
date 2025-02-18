@@ -21,7 +21,7 @@ integration_assets = load_assets_from_modules([integration])
 
 
 ## INTEGRATION JOBS ##
-db_2_db_job = define_asset_job(name="db_2_db", selection=["get_table_mapping", "get_field_mapping", "get_source_data", "transform_data", "transform_attributes", "add_destination_data", "add_destination_attributes"])
+db_2_db_job = define_asset_job(name="db_2_db", selection=["get_db_credentials", "get_table_mapping", "get_field_mapping", "get_source_data", "transform_data", "transform_attributes", "add_destination_data", "add_destination_attributes"])
 
 
 

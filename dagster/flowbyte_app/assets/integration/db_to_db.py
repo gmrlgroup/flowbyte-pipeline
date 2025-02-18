@@ -121,7 +121,22 @@ def get_max_incremental_value(table_mapping, incremental_col):
     return cdc_key or 0
 
 
-@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="sql", group_name="config", io_manager_key="parquet_io_manager", partitions_def=integration_tables_partitions)
+@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="sql", group_name="config", io_manager_key="parquet_io_manager", partitions_def=table_partitions)
+def get_db_credentials():
+    
+    query = f"""SELECT * FROM [dbo].[database_credential]"""
+
+    sql_setup.connect()
+
+    df = sql_setup.get_data(query, chunksize=1000)
+
+    metadata = {
+        "row_sql": MetadataValue.md("```SQL\n" + query + "\n```")
+    }
+
+    return Output(value=df, metadata=metadata)
+
+
 def get_table_mapping(context):
     """
     Get Table Mappings
