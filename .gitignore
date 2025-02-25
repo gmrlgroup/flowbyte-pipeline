@@ -169,3 +169,8 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+
+
+# dagster
+dagster/.telemetry/id.yaml
