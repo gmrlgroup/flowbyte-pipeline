@@ -95,10 +95,6 @@ class PandasParquetIOManager(UPathIOManager):
             # e.g. /my_storage/some_asset
             base_path = UPath(os.path.join(storage_path, context.asset_key.path[0]))
 
-        log.log_info(f"load_from_path: {base_path}")
-        
-        # log.log_info(f"load_from_path: {base_path}")
-
         # 2. Define recognized extensions and how to read them
         EXTENSION_READERS = {
             ".parquet": pd.read_parquet,
