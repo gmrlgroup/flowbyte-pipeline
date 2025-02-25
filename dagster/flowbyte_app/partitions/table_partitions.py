@@ -1,0 +1,60 @@
+from flowbyte.sql import MSSQL
+import os
+
+import sys
+sys.path.append('..')
+from modules import sql, log
+
+
+env = os.getenv('ENV')
+
+server, database, username, password = sql.get_connection_details("SETUP")
+sql_setup = MSSQL(
+    host=server,
+    username=username,
+    password=password,
+    database=database,
+    driver="ODBC Driver 17 for SQL Server",
+    connection_type="sqlalchemy"
+
+    )
+
+
+def get_databases(source_type, destination_type):
+
+    sql_setup.connect()
+
+    query = f"""SELECT  tm.[source_host],
+                        tm.[source_database],
+                        tm.[source_table],
+                        tm.[source_api_endpoint],
+                        tm.[destination_host],
+                        tm.[destination_database],
+                        tm.[destination_table],
+                        tm.[destination_api_endpoint],
+                        tm.[query],
+                        tm.[is_attribute],
+                        tm.[attribute_table_name],
+                        tm.[temp_table_name],
+                        tm.[is_incremental],
+                        tm.[incremental_column]
+
+                    FROM [dbo].[table_mapping] as tm
+                    LEFT JOIN [data].[database] as source ON source.host = tm.source_host and source.[name] = tm.source_database
+                    LEFT JOIN [data].[database] as destincation ON destincation.host = tm.destination_host and destincation.[name] = tm.destination_database
+
+                    WHERE source.[type] = '{source_type}' AND destincation.[type] = '{destination_type}'
+            """
+
+    if env == "DEV":
+        log.log_debug(f"DEBUG: {query}")
+
+    df = sql_setup.get_data(query, chunksize=1000)
+
+    if env == "DEV":
+        log.log_info(df)
+
+    df['database_id'] = df['source_host'].astype(str) + "/" + df['source_database'].astype(str) + "/" + df['source_table'].astype(str)
+
+
+    return df['database_id'].unique().tolist()
