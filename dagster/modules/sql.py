@@ -145,14 +145,14 @@ def generate_query(table_mapping, field_mappings, incremental_col=None, max_incr
         dest_col = mapping["destination_column"]
         
 
-        main_columns.append(f"i.{src_col} AS {dest_col}")
+        main_columns.append(f"i.[{src_col}] AS [{dest_col}]")
 
     # Build the SELECT clause by concatenating main and attribute columns.
     select_clause = ", ".join(main_columns) #+ attribute_columns)
     
     # Build the FROM clause. We assume that both tables are in the same database
     query = f"SELECT {select_clause}\n"
-    query += f"FROM {dest_table} i\n"
+    query += f"FROM [{dest_table}] i\n"
 
     if incremental_col:
         query += f"WHERE i.{incremental_col} > {max_incremental_value}\n"

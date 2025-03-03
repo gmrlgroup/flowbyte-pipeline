@@ -2,11 +2,11 @@ import pandas as pd
 from upath import UPath
 import os
 import pyarrow as pa
-import numpy as np
 import pyarrow.parquet as pq
 from typing import Optional
-from scipy.sparse import csr_matrix, lil_matrix
 import json
+import numpy as np
+from scipy.sparse import csr_matrix, lil_matrix
 import pickle
 from dagster import (
     OutputContext,
@@ -14,17 +14,17 @@ from dagster import (
     Output,
     MetadataValue,
     InputContext,
-    Config
+    Config,
+    PathMetadataValue
 )
 
 
 from modules import log
 
 
-
 class PandasParquetIOManager(UPathIOManager):
     extension: str = ".parquet"
-    
+
 
     def __init__(self, base_path=None, **kwargs):
         # Use "xyz" as the default base path if none is provided
@@ -34,13 +34,7 @@ class PandasParquetIOManager(UPathIOManager):
     def base_path(self):
         """Override base_path to use the instance's _base_path."""
         return self._base_path
-    
-
-    # def create_folder(self, folder_path, folder_name):
-    #     if not os.path.isdir(folder_path + folder_name):
-    #         new_path = folder_path + folder_name
-    #         os.makedirs(new_path)
-        
+            
 
     def dump_to_path(self, context: OutputContext, obj: object, path: UPath):
         
@@ -57,13 +51,17 @@ class PandasParquetIOManager(UPathIOManager):
         else:
             self.extension = ".parquet"
 
-        # path = UPath(storage_path)
         if context.has_partition_key:
-            path =  UPath(str(storage_path) + '/' +str(context.asset_key.path[0]) + '/' + str(context.asset_partition_key)  + str(self.extension))
+            if isinstance(context.asset_partition_key, tuple):  # Check if it's multi-dimensional
+                partition_path = "/".join(str(p) for p in context.asset_partition_key)  # Join partitions
+            else:
+                partition_path = str(context.asset_partition_key)  # Single partition
+
+            partition_path = partition_path.replace("|", "\\")
+            path = UPath(f"{storage_path}/{context.asset_key.path[0]}/{partition_path}{self.extension}")
         else:
-            path =  UPath(str(storage_path) + '/' +str(context.asset_key.path[0]) + str(self.extension))
-            
-        
+            path = UPath(f"{storage_path}/{context.asset_key.path[0]}{self.extension}")
+
         preview, rows, columns = self.save_files(context, obj, path)
   
 
@@ -84,13 +82,22 @@ class PandasParquetIOManager(UPathIOManager):
 
 
 
-    def load_from_path(self, context: InputContext, path: UPath) -> pd.DataFrame:
-    
+    def load_from_path(self, context: InputContext, path: UPath):
         # 1. Identify base path (no extension yet)
         storage_path = os.getenv('STORAGE_PATH')
+
+
+
         if context.has_partition_key:
+            
+            if isinstance(context.asset_partition_key, tuple):# Check if it's multi-dimensional
+                partition_path = "/".join(str(p) for p in context.asset_partition_key)  # Join partitions
+            else:
+                partition_path = str(context.asset_partition_key)  # Single partition
+
+            partition_path = partition_path.replace("|", "\\")
             # e.g. /my_storage/some_asset/partition_key
-            base_path = UPath(os.path.join(storage_path, context.asset_key.path[0], context.asset_partition_key))
+            base_path = UPath(os.path.join(storage_path, context.asset_key.path[0], partition_path))
         else:
             # e.g. /my_storage/some_asset
             base_path = UPath(os.path.join(storage_path, context.asset_key.path[0]))
@@ -121,7 +128,7 @@ class PandasParquetIOManager(UPathIOManager):
         # If none of the candidate paths exist, handle gracefully
         # raise FileNotFoundError(f"No file found at {base_path} with any recognized extension: {list(EXTENSION_READERS.keys())}")
 
-
+            
 
     def save_files(self, context: OutputContext, obj: object, path: UPath):
         
@@ -179,12 +186,15 @@ class PandasParquetIOManager(UPathIOManager):
 
 
 
+
+
         else:
             preview = ""
             rows, columns = 0, 0
 
 
         return preview, rows, columns
+
 
                     
 class QueryModel(Config):
