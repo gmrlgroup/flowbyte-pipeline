@@ -4,7 +4,7 @@ from dagster import MetadataValue, Output, asset, StaticPartitionsDefinition
 from flowbyte.sql import MSSQL
 import os
 import duckdb
-from flowbyte_app.partitions import get_databases
+from flowbyte_app.partitions import table_partitions
 
 
 import sys
@@ -29,7 +29,7 @@ sql_setup = MSSQL(
 
 
 
-table_partitions = StaticPartitionsDefinition(get_databases('mssql', 'duckdb'))
+# table_partitions = StaticPartitionsDefinition(get_tables('mssql', 'duckdb'))
 
 
 
