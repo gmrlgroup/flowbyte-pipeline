@@ -1,9 +1,9 @@
 import os
 import pandas as pd
-from dagster import MetadataValue, Output, asset, StaticPartitionsDefinition
+from dagster import MetadataValue, Output, asset, StaticPartitionsDefinition, MultiPartitionKey
 from flowbyte.sql import MSSQL
 import os
-
+from flowbyte_app.partitions import db_to_db_partitions
 
 import sys
 sys.path.append('..')
@@ -20,138 +20,18 @@ sql_setup = MSSQL(
     password=password,
     database=database,
     driver="ODBC Driver 17 for SQL Server",
-    connection_type="pyodbc"
+    connection_type="sqlalchemy"
 
     )
 
 
 
-def get_databases():
-
-    sql_setup.connect()
-
-    query = f"""SELECT *
-
-            FROM [dbo].[table_mapping]
-            """
-
-    if env == "DEV":
-        log.log_debug(f"DEBUG: {query}")
-
-    df = sql_setup.get_data(query, chunksize=1000)
-
-    if env == "DEV":
-        log.log_info(df)
-
-    df['database_id'] = df['source_host'].astype(str) + "/" + df['source_database'].astype(str) + "/" + df['source_table'].astype(str)
-
-
-    return df['database_id'].unique().tolist()
-
-
-table_partitions = StaticPartitionsDefinition(get_databases())
 
 
 
-def init_sql(db_credentials):
-    host = db_credentials['host'].iloc[0]
-    database = db_credentials['database_name'].iloc[0]
-    username = db_credentials['username'].iloc[0]
-    password = db_credentials['password'].iloc[0]
-
-    # server, database, username, password = sql.get_connection_details("SOURCE")
-    sql = MSSQL(
-        host=host,
-        username=username,
-        password=password,
-        database=database,
-        driver="ODBC Driver 17 for SQL Server",
-        connection_type="sqlalchemy"
-
-        )
-    
-    return sql
 
 
-def get_non_matching_rows(df1: pd.DataFrame, df2: pd.DataFrame, keys: list):
-    """
-    Returns rows from df1 that do not exist in df2 based on the specified keys.
-    
-    :param df1: First DataFrame
-    :param df2: Second DataFrame
-    :param keys: List of column names to be used as keys for comparison
-    :return: Filtered DataFrame containing only rows from df1 that do not exist in df2
-    """
-    df_merged = df1.merge(df2, on=keys, how='left', indicator=True)
-    df_filtered = df_merged[df_merged['_merge'] == 'left_only'].drop(columns=['_merge'])
-    return df_filtered
-
-
-def print_progress(records, message="Extracted records so far"):
-    log.log_info(f"{message}: {records}")
-
-
-def generate_query(table_mapping, field_mappings, incremental_col=None, max_incremental_value=None):
-
-
-    main_table = None
-    main_columns = []      # columns coming from the main table (alias i)
-    dest_table = table_mapping['source_table'].iloc[0]
-
-    for mapping in field_mappings:
-        src_col = mapping["source_column"]
-        dest_col = mapping["destination_column"]
-        
-
-        main_columns.append(f"i.{src_col} AS {dest_col}")
-
-    # Build the SELECT clause by concatenating main and attribute columns.
-    select_clause = ", ".join(main_columns) #+ attribute_columns)
-    
-    # Build the FROM clause. We assume that both tables are in the same database
-    query = f"SELECT {select_clause}\n"
-    query += f"FROM {dest_table} i\n"
-
-    if incremental_col:
-        query += f"WHERE i.{incremental_col} > {max_incremental_value}\n"
-    
-    
-    return query
-
-
-def get_max_incremental_value(db_credentials, table_mapping, incremental_col):
-
-    log.log_info("Getting Max Incremental Value from Destination Table")
-
-    log.log_info(db_credentials)
-    
-    # Get table name
-    table = table_mapping['destination_table'].iloc[0]
-
-    # Create the query to get max incremental value
-    query = f"SELECT MAX({incremental_col}) as cdc_key FROM {table}"
-
-    int_columns = [incremental_col]
-
-    sql_destination = init_sql(db_credentials)
-    sql_destination.connect()
-
-    # Get max incremental value
-    max_value = sql_destination.get_data(query, integer_columns=int_columns)
-
-    log.log_info(max_value)
-
-    # if max_value.empty:
-    if pd.isna(max_value.loc[0, 'cdc_key']):
-        return 0
-
-    cdc_key = max_value['cdc_key'].iloc[0]
-
-    return cdc_key
-
-
-
-@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="sql", group_name="config", io_manager_key="parquet_io_manager", partitions_def=table_partitions)
+@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="sql", group_name="config", io_manager_key="parquet_io_manager", partitions_def=db_to_db_partitions)
 def get_db_credentials():
     
     query = f"""SELECT * FROM [dbo].[database_credential]"""
@@ -168,24 +48,57 @@ def get_db_credentials():
 
 
 
-@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="sql", group_name="config", io_manager_key="parquet_io_manager", partitions_def=table_partitions)
+@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="sql", group_name="config", io_manager_key="parquet_io_manager", partitions_def=db_to_db_partitions)
 def get_table_mapping(context):
     """
     Get Table Mappings
     """
 
-    source_host = context.partition_key.split("/")[0]
-    source_db = context.partition_key.split("/")[1]
-    table_name = context.partition_key.split("/")[2]
+    partition_key: MultiPartitionKey = context.partition_key.keys_by_dimension
+
+    log.log_info(partition_key)
+    
+    source_key = partition_key["source"]
+    destination_key = partition_key["destination"]
+
+    source_host = source_key.split("/")[0]
+    source_db = source_key.split("/")[1]
+    source_table_name = source_key.split("/")[2]
+
+    destination_host = destination_key.split("/")[0]
+    destination_db = destination_key.split("/")[1]
+    destination_table_name = destination_key.split("/")[2]
+
+    # source_host = context.partition_key.split("/")[0]
+    # source_db = context.partition_key.split("/")[1]
+    # table_name = context.partition_key.split("/")[2]
 
 
     sql_setup.connect()
 
-    query = f"""SELECT *
+    query = f"""SELECT  tm.[source_host],
+                        tm.[source_database],
+                        tm.[source_table],
+                        tm.[source_api_endpoint],
+                        tm.[destination_host],
+                        tm.[destination_database],
+                        tm.[destination_table],
+                        tm.[destination_api_endpoint],
+                        tm.[query],
+                        tm.[is_attribute],
+                        tm.[attribute_table_name],
+                        tm.[temp_table_name],
+                        tm.[is_incremental],
+                        tm.[incremental_column]
 
-            FROM [dbo].[table_mapping]
+            FROM [dbo].[table_mapping] as tm
+            LEFT JOIN [data].[database] as source ON source.host = tm.source_host and source.[name] = tm.source_database
+            LEFT JOIN [data].[database] as destincation ON destincation.host = tm.destination_host and destincation.[name] = tm.destination_database
 
-            WHERE [source_table] = '{table_name}' AND source_host = '{source_host}' AND source_database = '{source_db}'
+            WHERE [source_table] = '{source_table_name}' AND source_host = '{source_host}' AND source_database = '{source_db}'
+            AND [destination_table] = '{destination_table_name}' AND destination_host = '{destination_host}' AND destination_database = '{destination_db}'
+
+            AND source.[type] = 'mssql' AND destincation.[type] = 'mssql'
             """
 
     if env == "DEV":
@@ -205,25 +118,59 @@ def get_table_mapping(context):
 
 
 
-@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="sql", group_name="config", io_manager_key="parquet_io_manager", partitions_def=table_partitions)
+@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="sql", group_name="config", io_manager_key="parquet_io_manager", partitions_def=db_to_db_partitions)
 def get_field_mapping(context):
     """
     Get Field Mappings
     """
 
-    source_host = context.partition_key.split("/")[0]
-    source_db = context.partition_key.split("/")[1]
-    table_name = context.partition_key.split("/")[2]
+    # source_host = context.partition_key.split("/")[0]
+    # source_db = context.partition_key.split("/")[1]
+    # table_name = context.partition_key.split("/")[2]
+
+    partition_key: MultiPartitionKey = context.partition_key.keys_by_dimension
+    source_key = partition_key["source"]
+    destination_key = partition_key["destination"]
+
+    source_host = source_key.split("/")[0]
+    source_db = source_key.split("/")[1]
+    table_name = source_key.split("/")[2]
+
+    destination_host = destination_key.split("/")[0]
+    destination_db = destination_key.split("/")[1]
+    destination_table_name = destination_key.split("/")[2]
+
 
 
     sql_setup.connect()
 
 
-    query = f"""SELECT *
+    query = f"""SELECT    fm.[source_host],
+                        fm.[source_database],
+                        fm.[source_table],
+                        fm.[source_column],
+                        fm.[destination_host],
+                        fm.[destination_database],
+                        fm.[destination_table],
+                        fm.[destination_column],
+                        fm.[source_data_type],
+                        fm.[destination_data_type],
+                        fm.[is_group_by],
+                        fm.[is_sum],
+                        fm.[is_count],
+                        fm.[filter_query],
+                        fm.[default_value],
+                        fm.[is_attribute],
+                        fm.[is_attribute_key],
+                        fm.[is_primary_key]
+                FROM [dbo].[field_mapping] as fm
+                    LEFT JOIN [data].[database] as source ON source.host = fm.source_host and source.[name] = fm.source_database
+                    LEFT JOIN [data].[database] as destincation ON destincation.host = fm.destination_host and destincation.[name] = fm.destination_database
 
-            FROM [dbo].[field_mapping]
+                WHERE [source_table] = '{table_name}' AND source_host = '{source_host}' AND source_database = '{source_db}'
+                AND [destination_table] = '{destination_table_name}' AND destination_host = '{destination_host}' AND destination_database = '{destination_db}'
 
-            WHERE [source_table] = '{table_name}' AND source_host = '{source_host}' AND source_database = '{source_db}'
+                AND source.[type] = 'mssql' AND destincation.[type] = 'mssql'
             """
 
     if env == "DEV":
@@ -242,24 +189,32 @@ def get_field_mapping(context):
 
 
 
-@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="sql", group_name="extract", io_manager_key="parquet_io_manager", partitions_def=table_partitions)
+@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="sql", group_name="extract", io_manager_key="parquet_io_manager", partitions_def=db_to_db_partitions)
 def get_source_data(context, get_db_credentials, get_table_mapping, get_field_mapping, config: models.QueryModel):
     """
     Get Data from Source
     """
 
-    log.log_debug(get_table_mapping)
+    log.log_debug(f'Table Mapping: {get_table_mapping}')
     table_mapping = get_table_mapping
     table_mapping_no_attribute = table_mapping[table_mapping['is_attribute'] == 0]
 
     destination_host = table_mapping_no_attribute['destination_host'].iloc[0]
     destination_database = table_mapping_no_attribute['destination_database'].iloc[0]
+    source_host = table_mapping_no_attribute['source_host'].iloc[0]
+    source_database = table_mapping_no_attribute['source_database'].iloc[0]
     
     # get db credentials where database name is equal to the source database and host is equal to the source host
-    db_credentials = get_db_credentials[(get_db_credentials['database_name'] == destination_database) & (get_db_credentials['host'] == destination_host)]
+    db_credentials_source = get_db_credentials[(get_db_credentials['database_name'] == source_database) & (get_db_credentials['host'] == source_host)]
+    db_credentials_dest = get_db_credentials[(get_db_credentials['database_name'] == destination_database) & (get_db_credentials['host'] == destination_host)]
+    
 
-    sql_source = init_sql(db_credentials)
+    sql_source = sql.init_sql(db_credentials_source)
     sql_source.connect()
+
+
+    sql_destination = sql.init_sql(db_credentials_dest)
+    sql_destination.connect()
 
     # check if table is_attribute is True
     is_incremental = table_mapping['is_incremental'].iloc[0]
@@ -271,7 +226,7 @@ def get_source_data(context, get_db_credentials, get_table_mapping, get_field_ma
     mapping_data = field_mapping.to_dict(orient='records')
 
     if env == "DEV":
-        log.log_info(mapping_data)
+        log.log_debug(f"Mapping Data: {mapping_data}")
 
 
     # check if the query in QueryModel is not empty
@@ -286,23 +241,42 @@ def get_source_data(context, get_db_credentials, get_table_mapping, get_field_ma
     else:
         if is_incremental:
             incremental_col = table_mapping['incremental_column'].iloc[0]
-            max_incremental_value = get_max_incremental_value(db_credentials=db_credentials, table_mapping=table_mapping_no_attribute, incremental_col=incremental_col)
-            query = generate_query(table_mapping_no_attribute, mapping_data, incremental_col, max_incremental_value)
+            max_incremental_value = sql.get_max_incremental_value(sql=sql_destination, table_mapping=table_mapping_no_attribute, incremental_col=incremental_col)
+            query = sql.generate_query(table_mapping_no_attribute, mapping_data, incremental_col, max_incremental_value)
 
         else:
-            query = generate_query(table_mapping_no_attribute, mapping_data)
+            query = sql.generate_query(table_mapping_no_attribute, mapping_data)
     
     
     if env == "DEV":
-        log.log_info(query)
+        log.log_debug(f"Query: {query}")
 
     
     object_columns = []
-    object_columns = get_field_mapping[get_field_mapping['source_data_type'] == 'TEXT']
+    float_columns = []
+    integer_columns = []
+    # obcjec columns start with NVARCHAR
+    object_columns = field_mapping[field_mapping['source_data_type'].str.startswith('NVARCHAR')]
     object_columns = object_columns['source_column'].tolist()
-    log.log_info(object_columns)
 
-    df = sql_source.get_data(query, chunksize=100000, object_columns=object_columns, progress_callback=print_progress, message="Extracted ")
+    # int columns contains INT
+    integer_columns = field_mapping[field_mapping['source_data_type'].str.contains('INT')]
+    integer_columns = integer_columns['source_column'].tolist()
+
+    # float columns contains DECIMAL
+    float_columns = field_mapping[field_mapping['source_data_type'].str.startswith('DECIMAL')]
+    float_columns = float_columns['source_column'].tolist()
+
+
+    if env == "DEV":
+        log.log_debug(f"Object Columns: {object_columns}")
+        log.log_debug(f"Integer Columns: {integer_columns}")
+        log.log_debug(f"Float Columns: {float_columns}")
+
+        log.log_debug(f"HOST: {sql_source.host}")
+        log.log_debug(f"DATABASE: {sql_source.database}")
+
+    df = sql_source.get_data(query, chunksize=100000, object_columns=object_columns, float_columns=float_columns, integer_columns=integer_columns, progress_callback=sql.print_progress, message="Extracted ")
 
     metadata = {
         "row_sql": MetadataValue.md("```SQL\n" + query + "\n```")
@@ -312,28 +286,24 @@ def get_source_data(context, get_db_credentials, get_table_mapping, get_field_ma
 
 
 
-@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="sql", group_name="transform", io_manager_key="parquet_io_manager", partitions_def=table_partitions)
-def transform_data(context, get_table_mapping, get_field_mapping, get_source_data):
+@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="sql", group_name="transform", io_manager_key="parquet_io_manager", partitions_def=db_to_db_partitions)
+def transform_data(context, get_field_mapping, get_source_data):
     """
     Transform Data
     """
 
     df = get_source_data
 
-    if df == None or  df.empty:
+    log.log_info(df)
+
+    if df is None or  df.empty:
         return Output(value=df)
 
 
-    destination_host = table_mapping['destination_host'].iloc[0]
-    destination_db = table_mapping['destination_database'].iloc[0]
     field_mapping = get_field_mapping
 
 
-    # Apply the filters using boolean indexing
-    table_mapping = get_table_mapping.loc[
-        (get_table_mapping['destination_host'] == destination_host) &
-        (get_table_mapping['destination_database'] == destination_db)
-    ]
+    
 
     log.log_info(field_mapping)
 
@@ -370,7 +340,7 @@ def transform_data(context, get_table_mapping, get_field_mapping, get_source_dat
 
 
 
-@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="sql", group_name="transform", io_manager_key="parquet_io_manager", partitions_def=table_partitions)
+@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="sql", group_name="transform", io_manager_key="parquet_io_manager", partitions_def=db_to_db_partitions)
 def transform_attributes(context, get_field_mapping, get_source_data):
     """
     Transform Attributes
@@ -381,7 +351,7 @@ def transform_attributes(context, get_field_mapping, get_source_data):
 
     df = get_source_data
 
-    if df == None or  df.empty:
+    if df is None or  df.empty:
         return Output(value=df)
 
     # field_mapping = get_field_mapping
@@ -429,20 +399,27 @@ def transform_attributes(context, get_field_mapping, get_source_data):
 
 
 
-@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="api", group_name="load", io_manager_key="parquet_io_manager", partitions_def=table_partitions)
+@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="api", group_name="load", io_manager_key="parquet_io_manager", partitions_def=db_to_db_partitions)
 def add_destination_data(context, get_db_credentials, get_table_mapping, get_field_mapping, transform_data):
     """
     Add Data to Destination
     """
     df = transform_data
 
-    if df == None or  df.empty:
+    if df is None or  df.empty:
         return Output(value=df)
     
     # Get table_name for partition
-    db_credentials = get_db_credentials
-    table_mapping = get_table_mapping
+    
+    table_mapping = get_table_mapping[get_table_mapping['is_attribute'] == 0]
     field_mapping = get_field_mapping
+
+    destination_host = table_mapping['destination_host'].iloc[0]
+    destination_database = table_mapping['destination_database'].iloc[0]
+
+    db_credentials = get_db_credentials[(get_db_credentials['database_name'] == destination_database) & (get_db_credentials['host'] == destination_host)]
+
+    log.log_info(db_credentials)
 
     table_name = table_mapping['destination_table'].iloc[0]
     is_incremental = table_mapping['is_incremental'].iloc[0]
@@ -452,7 +429,7 @@ def add_destination_data(context, get_db_credentials, get_table_mapping, get_fie
     
     
     # sql_destination.connect()
-    sql_destination = init_sql(db_credentials)
+    sql_destination = sql.init_sql(db_credentials)
     sql_destination.connect()
     
     # get list of destination columns from field mapping
@@ -508,15 +485,15 @@ def add_destination_data(context, get_db_credentials, get_table_mapping, get_fie
 
 
 
-@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="api", group_name="load", io_manager_key="parquet_io_manager", partitions_def=table_partitions)
-def add_destination_attributes(context, get_db_credentials, get_table_mapping, get_field_mapping, add_destination_data, transform_attributes):
+@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="api", group_name="load", io_manager_key="parquet_io_manager", partitions_def=db_to_db_partitions)
+def add_destination_attributes(context, get_db_credentials, get_table_mapping, get_field_mapping, transform_attributes):
     """
     Add Attributes to Destination
     """
 
     df = transform_attributes
 
-    if df == None or  df.empty:
+    if df is None or  df.empty:
         return Output(value=df)
 
     # get the first destination_table from the field mapping
@@ -525,12 +502,16 @@ def add_destination_attributes(context, get_db_credentials, get_table_mapping, g
     table_name = table_mapping['destination_table'].iloc[0]
     log.log_info(table_name)
 
+    destination_host = table_mapping['destination_host'].iloc[0]
+    destination_database = table_mapping['destination_database'].iloc[0]
+    db_credentials = get_db_credentials[(get_db_credentials['database_name'] == destination_database) & (get_db_credentials['host'] == destination_host)]
+
     is_incremental = table_mapping['is_incremental'].iloc[0]
     temp_schema = os.getenv('TEMP_SCHEMA') or "tmp"
     schema = "dbo"
     temp_table_name = table_mapping['temp_table_name'].iloc[0]
 
-    sql_destination = init_sql(get_db_credentials)
+    sql_destination = sql.init_sql(db_credentials)
     sql_destination.connect()
     
     # get list of destination columns from field mapping

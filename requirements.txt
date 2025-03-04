@@ -1,7 +1,7 @@
-dagster==1.9.11
-dagster-webserver==1.9.11
+dagster==1.10.3
+dagster-webserver==1.10.3
 dagster-graphql
-dagster-postgres==0.25.11
+dagster-postgres==0.26.3
 flowbyte
 openpyxl
 scipy
