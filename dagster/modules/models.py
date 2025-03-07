@@ -58,6 +58,8 @@ class PandasParquetIOManager(UPathIOManager):
                 partition_path = str(context.asset_partition_key)  # Single partition
 
             partition_path = partition_path.replace("|", "\\")
+            partition_path = partition_path.replace(":", "")
+
             path = UPath(f"{storage_path}/{context.asset_key.path[0]}/{partition_path}{self.extension}")
         else:
             path = UPath(f"{storage_path}/{context.asset_key.path[0]}{self.extension}")
@@ -96,6 +98,7 @@ class PandasParquetIOManager(UPathIOManager):
                 partition_path = str(context.asset_partition_key)  # Single partition
 
             partition_path = partition_path.replace("|", "\\")
+            partition_path = partition_path.replace(":", "")
             # e.g. /my_storage/some_asset/partition_key
             base_path = UPath(os.path.join(storage_path, context.asset_key.path[0], partition_path))
         else:
@@ -128,9 +131,17 @@ class PandasParquetIOManager(UPathIOManager):
         # If none of the candidate paths exist, handle gracefully
         # raise FileNotFoundError(f"No file found at {base_path} with any recognized extension: {list(EXTENSION_READERS.keys())}")
 
-            
+    
+
 
     def save_files(self, context: OutputContext, obj: object, path: UPath):
+
+        if not os.path.isdir(path):
+            # folder path = path but wuthout the file name
+            
+            directory_path = os.path.dirname(path)
+            # new_path = folder_path + folder_name
+            os.makedirs(directory_path)
         
         if isinstance(obj, pd.DataFrame):
             with path.open("wb") as file:

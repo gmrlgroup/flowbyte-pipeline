@@ -66,7 +66,7 @@ def get_db_credentials():
 
         )
     
-    query = f"""SELECT * FROM [dbo].[database_credential]"""
+    query = f"""SELECT * FROM [data].[database_credentials]"""
 
     sql_setup.connect()
 

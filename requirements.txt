@@ -6,3 +6,5 @@ flowbyte
 openpyxl
 scipy
 logfire
+duckdb
+pyarrow

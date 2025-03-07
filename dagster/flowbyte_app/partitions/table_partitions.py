@@ -120,17 +120,25 @@ def get_tables(source_type, destination_type):
 
 source_tables, destination_tables, partition_keys = get_tables('mssql', 'mssql')
 
-
+source_adls_tables, destination_duckdb_tables, partition_keys = get_tables('adls', 'duckdb')
 
 database_partitions = StaticPartitionsDefinition(get_databases('mssql', 'mssql'))
+adls_duckdb_partitions = StaticPartitionsDefinition(get_databases('adls', 'duckdb'))
 
 table_partitions = StaticPartitionsDefinition(source_tables)
+
 source_table_partitions = StaticPartitionsDefinition(source_tables)
 destination_table_partitions = StaticPartitionsDefinition(destination_tables)
+
+adls_table_partitions = StaticPartitionsDefinition(source_adls_tables)
+duckdb_table_partitions = StaticPartitionsDefinition(destination_duckdb_tables)
 
 # Create two PartitionDefinitions
 db_to_db_partitions = MultiPartitionsDefinition(
     {"source": source_table_partitions, "destination": destination_table_partitions}
 )
 
+adls_to_duckdb_partitions = MultiPartitionsDefinition(
+    {"source": adls_table_partitions, "destination": duckdb_table_partitions}
+)
 
