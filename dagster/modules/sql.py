@@ -133,12 +133,16 @@ def get_max_incremental_value(sql: MSSQL, table_mapping, incremental_col):
 
 
 
-def generate_query(table_mapping, field_mappings, incremental_col=None, max_incremental_value=None):
+def generate_query(table_mapping, field_mappings, incremental_col=None, max_incremental_value=None, schema=None):
 
 
     
     main_columns = []      # columns coming from the main table (alias i)
     dest_table = table_mapping['source_table'].iloc[0]
+    if schema:
+        dest_table = f"[{schema}].[{dest_table}]"
+    else:
+        dest_table = f"[dbo].[{dest_table}]"
 
     for mapping in field_mappings:
         src_col = mapping["source_column"]
@@ -152,7 +156,7 @@ def generate_query(table_mapping, field_mappings, incremental_col=None, max_incr
     
     # Build the FROM clause. We assume that both tables are in the same database
     query = f"SELECT {select_clause}\n"
-    query += f"FROM [{dest_table}] i\n"
+    query += f"FROM {dest_table} i\n"
 
     if incremental_col:
         query += f"WHERE i.{incremental_col} > {max_incremental_value}\n"

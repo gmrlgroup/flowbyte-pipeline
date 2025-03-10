@@ -122,16 +122,21 @@ source_tables, destination_tables, partition_keys = get_tables('mssql', 'mssql')
 
 source_adls_tables, destination_duckdb_tables, partition_keys = get_tables('adls', 'duckdb')
 
-database_partitions = StaticPartitionsDefinition(get_databases('mssql', 'mssql'))
-adls_duckdb_partitions = StaticPartitionsDefinition(get_databases('adls', 'duckdb'))
+source_db_tables, destination_duckdb_tables_2, partition_keys = get_tables('mssql', 'duckdb')
 
-table_partitions = StaticPartitionsDefinition(source_tables)
+# database_partitions = StaticPartitionsDefinition(get_databases('mssql', 'mssql'))
+# adls_duckdb_partitions = StaticPartitionsDefinition(get_databases('adls', 'duckdb'))
+
+# table_partitions = StaticPartitionsDefinition(source_tables)
 
 source_table_partitions = StaticPartitionsDefinition(source_tables)
 destination_table_partitions = StaticPartitionsDefinition(destination_tables)
 
-adls_table_partitions = StaticPartitionsDefinition(source_adls_tables)
-duckdb_table_partitions = StaticPartitionsDefinition(destination_duckdb_tables)
+adls_source_table_partitions = StaticPartitionsDefinition(source_adls_tables)
+duckdb_dest_table_partitions = StaticPartitionsDefinition(destination_duckdb_tables)
+
+db_source_table_partitions = StaticPartitionsDefinition(source_db_tables)
+duckdb_dest_table_partitions_2 = StaticPartitionsDefinition(destination_duckdb_tables_2)
 
 # Create two PartitionDefinitions
 db_to_db_partitions = MultiPartitionsDefinition(
@@ -139,6 +144,6 @@ db_to_db_partitions = MultiPartitionsDefinition(
 )
 
 adls_to_duckdb_partitions = MultiPartitionsDefinition(
-    {"source": adls_table_partitions, "destination": duckdb_table_partitions}
+    {"source": db_source_table_partitions, "destination": duckdb_dest_table_partitions_2}
 )
 
