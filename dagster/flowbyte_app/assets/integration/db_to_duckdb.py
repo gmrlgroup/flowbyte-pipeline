@@ -1,10 +1,10 @@
 import os
 import pandas as pd
-from dagster import MetadataValue, Output, asset, StaticPartitionsDefinition
+from dagster import MetadataValue, Output, asset, StaticPartitionsDefinition, MultiPartitionKey
 from flowbyte.sql import MSSQL
 import os
 import duckdb
-from flowbyte_app.partitions import table_partitions
+from flowbyte_app.partitions import adls_to_duckdb_partitions
 
 
 import sys
@@ -34,15 +34,25 @@ sql_setup = MSSQL(
 
 
 
-@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="sql", group_name="config", io_manager_key="parquet_io_manager", partitions_def=table_partitions)
+@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="sql", group_name="config", io_manager_key="parquet_io_manager", partitions_def=adls_to_duckdb_partitions)
 def get_table_mapping_duckdb(context):
     """
     Get Table Mappings
     """
 
-    source_host = context.partition_key.split("/")[0]
-    source_db = context.partition_key.split("/")[1]
-    table_name = context.partition_key.split("/")[2]
+
+    partition_key: MultiPartitionKey = context.partition_key.keys_by_dimension
+
+    source_key = partition_key["source"]
+    destination_key = partition_key["destination"]
+
+    source_host = "/".join(source_key.split("/")[:-2])
+    source_db = source_key.split("/")[-2]
+    table_name = source_key.split("/")[-1]
+
+    destination_host = "/".join(destination_key.split("/")[:-2])
+    destination_db = destination_key.split("/")[-2]
+    destination_table_name = destination_key.split("/")[-1]
 
 
     sql_setup.connect()
@@ -60,13 +70,16 @@ def get_table_mapping_duckdb(context):
                         tm.[attribute_table_name],
                         tm.[temp_table_name],
                         tm.[is_incremental],
-                        tm.[incremental_column]
+                        tm.[incremental_column],
+                        tm.[source_schema]
 
             FROM [dbo].[table_mapping] as tm
             LEFT JOIN [data].[database] as source ON source.host = tm.source_host and source.[name] = tm.source_database
             LEFT JOIN [data].[database] as destincation ON destincation.host = tm.destination_host and destincation.[name] = tm.destination_database
 
             WHERE [source_table] = '{table_name}' AND source_host = '{source_host}' AND source_database = '{source_db}'
+            AND [destination_table] = '{destination_table_name}' AND destination_host = '{destination_host}' AND destination_database = '{destination_db}'
+            AND tm.[is_deleted] = 0
 
             AND source.[type] = 'mssql' AND destincation.[type] = 'duckdb'
 
@@ -89,15 +102,25 @@ def get_table_mapping_duckdb(context):
 
 
 
-@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="sql", group_name="config", io_manager_key="parquet_io_manager", partitions_def=table_partitions)
+@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="sql", group_name="config", io_manager_key="parquet_io_manager", partitions_def=adls_to_duckdb_partitions)
 def get_field_mapping_duckdb(context):
     """
     Get Field Mappings
     """
 
-    source_host = context.partition_key.split("/")[0]
-    source_db = context.partition_key.split("/")[1]
-    table_name = context.partition_key.split("/")[2]
+
+    partition_key: MultiPartitionKey = context.partition_key.keys_by_dimension
+
+    source_key = partition_key["source"]
+    destination_key = partition_key["destination"]
+
+    source_host = "/".join(source_key.split("/")[:-2])
+    source_db = source_key.split("/")[-2]
+    table_name = source_key.split("/")[-1]
+
+    destination_host = "/".join(destination_key.split("/")[:-2])
+    destination_db = destination_key.split("/")[-2]
+    destination_table_name = destination_key.split("/")[-1]
 
 
     sql_setup.connect()
@@ -121,11 +144,14 @@ def get_field_mapping_duckdb(context):
                         fm.[is_attribute],
                         fm.[is_attribute_key],
                         fm.[is_primary_key]
+
                 FROM [dbo].[field_mapping] as fm
                     LEFT JOIN [data].[database] as source ON source.host = fm.source_host and source.[name] = fm.source_database
                     LEFT JOIN [data].[database] as destincation ON destincation.host = fm.destination_host and destincation.[name] = fm.destination_database
 
                 WHERE [source_table] = '{table_name}' AND source_host = '{source_host}' AND source_database = '{source_db}'
+                AND [destination_table] = '{destination_table_name}' AND destination_host = '{destination_host}' AND destination_database = '{destination_db}'
+
 
                 AND source.[type] = 'mssql' AND destincation.[type] = 'duckdb'
             """
@@ -147,7 +173,7 @@ def get_field_mapping_duckdb(context):
 
 
 
-@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="sql", group_name="extract", io_manager_key="parquet_io_manager", partitions_def=table_partitions)
+@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="sql", group_name="extract", io_manager_key="parquet_io_manager", partitions_def=adls_to_duckdb_partitions)
 def get_source_data_duckdb(context, get_table_mapping_duckdb, get_field_mapping_duckdb, config: models.QueryModel):
     """
     Get Data from Source
@@ -161,6 +187,8 @@ def get_source_data_duckdb(context, get_table_mapping_duckdb, get_field_mapping_
     destination_database = table_mapping_no_attribute['destination_database'].iloc[0]
     source_host = table_mapping_no_attribute['source_host'].iloc[0]
     source_database = table_mapping_no_attribute['source_database'].iloc[0]
+    source_schema = table_mapping_no_attribute['source_schema'].iloc[0]
+    
     
     # get db credentials where database name is equal to the source database and host is equal to the source host
     df_credentials = sql.get_db_credentials()
@@ -203,10 +231,10 @@ def get_source_data_duckdb(context, get_table_mapping_duckdb, get_field_mapping_
         if is_incremental:
             incremental_col = table_mapping['incremental_column'].iloc[0]
             max_incremental_value = sql.get_max_incremental_value(sql=sql_destination, table_mapping=table_mapping_no_attribute, incremental_col=incremental_col)
-            query = sql.generate_query(table_mapping_no_attribute, mapping_data, incremental_col, max_incremental_value)
+            query = sql.generate_query(table_mapping_no_attribute, mapping_data, incremental_col, max_incremental_value, schema=source_schema)
 
         else:
-            query = sql.generate_query(table_mapping_no_attribute, mapping_data)
+            query = sql.generate_query(table_mapping_no_attribute, mapping_data, schema=source_schema)
 
             log.log_info(f"Non Incremental Query: {query}")
     
@@ -248,7 +276,7 @@ def get_source_data_duckdb(context, get_table_mapping_duckdb, get_field_mapping_
     return Output(value=df, metadata=metadata)
 
 
-@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="sql", group_name="transform", io_manager_key="parquet_io_manager", partitions_def=table_partitions)
+@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="sql", group_name="transform", io_manager_key="parquet_io_manager", partitions_def=adls_to_duckdb_partitions)
 def transform_data_duckdb(context, get_table_mapping_duckdb, get_field_mapping_duckdb, get_source_data_duckdb):
     """
     Transform Data
@@ -334,7 +362,7 @@ def transform_data_duckdb(context, get_table_mapping_duckdb, get_field_mapping_d
 
 
 
-@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="api", group_name="load", io_manager_key="parquet_io_manager", partitions_def=table_partitions)
+@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="api", group_name="load", io_manager_key="parquet_io_manager", partitions_def=adls_to_duckdb_partitions)
 def add_destination_data_duckdb(context, get_table_mapping_duckdb, get_field_mapping_duckdb, transform_data_duckdb):
     """
     Add Data to Destination
@@ -368,7 +396,7 @@ def add_destination_data_duckdb(context, get_table_mapping_duckdb, get_field_map
     schema = "dbo"
     temp_table_name = table_mapping['temp_table_name'].iloc[0]
 
-    db = f"{destination_host}/{destination_database}"
+    db = f"{destination_host}/{destination_database}.duckdb"
     # db = f"{destination_database}"
     con = duckdb.connect(db)  # Use ":memory:" for in-memory DB
     # sql_destination = init_sql(db_credentials)

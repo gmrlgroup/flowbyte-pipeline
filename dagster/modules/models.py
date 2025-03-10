@@ -135,11 +135,11 @@ class PandasParquetIOManager(UPathIOManager):
 
 
     def save_files(self, context: OutputContext, obj: object, path: UPath):
-
-        if not os.path.isdir(path):
+        directory_path = os.path.dirname(path)
+        if not os.path.isdir(directory_path):
             # folder path = path but wuthout the file name
             
-            directory_path = os.path.dirname(path)
+            
             # new_path = folder_path + folder_name
             os.makedirs(directory_path)
         
