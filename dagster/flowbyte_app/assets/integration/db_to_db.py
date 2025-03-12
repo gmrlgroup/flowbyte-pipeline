@@ -256,7 +256,7 @@ def get_source_data(context, get_db_credentials, get_table_mapping, get_field_ma
     float_columns = []
     integer_columns = []
     # obcjec columns start with NVARCHAR
-    object_columns = field_mapping[field_mapping['source_data_type'].str.startswith('NVARCHAR')]
+    object_columns = field_mapping[field_mapping['source_data_type'].str.startswith('TEXT')]
     object_columns = object_columns['source_column'].tolist()
 
     # int columns contains INT

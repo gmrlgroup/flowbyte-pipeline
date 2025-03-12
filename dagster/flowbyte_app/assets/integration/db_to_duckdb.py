@@ -196,8 +196,6 @@ def get_source_data_duckdb(context, get_table_mapping_duckdb, get_field_mapping_
     db_credentials_dest = df_credentials[(df_credentials['database_name'] == destination_database) & (df_credentials['host'] == destination_host)]
     
 
-    log.log_info(db_credentials_source)
-
     sql_source = sql.init_sql(db_credentials_source)
     sql_source.connect()
 
@@ -247,7 +245,7 @@ def get_source_data_duckdb(context, get_table_mapping_duckdb, get_field_mapping_
     float_columns = []
     integer_columns = []
     # obcjec columns start with NVARCHAR
-    object_columns = field_mapping[field_mapping['source_data_type'].str.startswith('NVARCHAR')]
+    object_columns = field_mapping[field_mapping['source_data_type'].str.contains('TEXT')]
     object_columns = object_columns['source_column'].tolist()
 
     # int columns contains INT
@@ -255,7 +253,7 @@ def get_source_data_duckdb(context, get_table_mapping_duckdb, get_field_mapping_
     integer_columns = integer_columns['source_column'].tolist()
 
     # float columns contains DECIMAL
-    float_columns = field_mapping[field_mapping['source_data_type'].str.startswith('DECIMAL')]
+    float_columns = field_mapping[field_mapping['source_data_type'].str.contains('DECIMAL')]
     float_columns = float_columns['source_column'].tolist()
 
 
@@ -299,15 +297,29 @@ def transform_data_duckdb(context, get_table_mapping_duckdb, get_field_mapping_d
         (field_mapping['destination_table'] == table_name)
     ]
 
+    # Assume field_mapping is a DataFrame with columns 'source_column' and 'destination_column'
+    mapping_dict = dict(zip(field_mapping['source_column'], field_mapping['destination_column']))
 
-    # rename columns
-    columns = field_mapping['destination_column'].tolist()
+    # Rename the columns in df based on the mapping
+    df = df.rename(columns=mapping_dict)
 
-    for i in range(len(columns)):
-        df.rename(columns={columns[i]: field_mapping['destination_column'].iloc[i]}, inplace=1)
+    # Get the list of destination columns
+    destination_cols = field_mapping['destination_column'].tolist()
 
-    # remove columns that are not in the field mapping
-    df = df[field_mapping['destination_column'].tolist()]
+
+    df = df[destination_cols]
+
+
+    # # rename columns
+    # columns = field_mapping['destination_column'].tolist()
+
+    # log.log_info(columns)
+
+    # for i in range(len(columns)):
+    #     df.rename(columns={columns[i]: field_mapping['destination_column'].iloc[i]}, inplace=1)
+
+    # # remove columns that are not in the field mapping
+    # df = df[columns]
 
 
     # convert columns

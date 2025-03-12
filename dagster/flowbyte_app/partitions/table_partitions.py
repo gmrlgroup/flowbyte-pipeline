@@ -103,13 +103,16 @@ def get_tables(source_type, destination_type):
     if env == "DEV":
         log.log_info(df)
 
+    if df.empty:
+        return ([], [], [])
+
     df['source_database_id'] = df['source_host'].astype(str) + "/" + df['source_database'].astype(str) + "/" + df['source_table'].astype(str)
     df['destination_database_id'] = df['destination_host'].astype(str) + "/" + df['destination_database'].astype(str) + "/" + df['destination_table'].astype(str)
     df['partition_key'] = df['destination_database_id'].astype(str) + "|" + df['source_database_id'].astype(str)
 
-    source_databases = df['source_database_id'].unique().tolist()
-    destination_databases = df['destination_database_id'].unique().tolist()
-    partition_keys = df['partition_key'].unique().tolist()
+    source_databases = df['source_database_id'].unique().tolist() if df['source_database_id'].notnull().any() else []
+    destination_databases = df['destination_database_id'].unique().tolist() if df['destination_database_id'].notnull().any() else []
+    partition_keys = df['partition_key'].unique().tolist() if df['partition_key'].notnull().any() else []
 
     return source_databases, destination_databases, partition_keys
 
@@ -118,7 +121,7 @@ def get_tables(source_type, destination_type):
 
 
 
-source_tables, destination_tables, partition_keys = get_tables('mssql', 'mssql')
+source_tables, destination_tables, partition_keys = get_tables('mssql', 'mssql') 
 
 source_adls_tables, destination_duckdb_tables, partition_keys = get_tables('adls', 'duckdb')
 
@@ -128,10 +131,12 @@ source_db_tables, destination_duckdb_tables_2, partition_keys = get_tables('mssq
 # adls_duckdb_partitions = StaticPartitionsDefinition(get_databases('adls', 'duckdb'))
 
 # table_partitions = StaticPartitionsDefinition(source_tables)
+database_partitions = StaticPartitionsDefinition(get_databases('mssql', 'duckdb'))
 
 source_table_partitions = StaticPartitionsDefinition(source_tables)
 destination_table_partitions = StaticPartitionsDefinition(destination_tables)
 
+# if source_adls_tables is not adls_source_table_partitions is none
 adls_source_table_partitions = StaticPartitionsDefinition(source_adls_tables)
 duckdb_dest_table_partitions = StaticPartitionsDefinition(destination_duckdb_tables)
 
