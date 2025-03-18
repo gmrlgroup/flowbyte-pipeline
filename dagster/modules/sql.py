@@ -165,6 +165,38 @@ def generate_query(table_mapping, field_mappings, incremental_col=None, max_incr
     return query
 
 
+def generate_duckdb_query(table_mapping, field_mappings, incremental_col=None, max_incremental_value=None, schema=None):
+
+
+    
+    main_columns = []      # columns coming from the main table (alias i)
+    dest_table = table_mapping['source_table'].iloc[0]
+    source_db = table_mapping['source_database'].iloc[0]
+    
+    dest_table = f"{source_db}.{dest_table}"
+
+
+    for mapping in field_mappings:
+        src_col = mapping["source_column"]
+        dest_col = mapping["destination_column"]
+        
+
+        main_columns.append(f"{src_col} AS {dest_col}")
+
+    # Build the SELECT clause by concatenating main and attribute columns.
+    select_clause = ", ".join(main_columns) #+ attribute_columns)
+    
+    # Build the FROM clause. We assume that both tables are in the same database
+    query = f"SELECT {select_clause}\n"
+    query += f"FROM {dest_table} \n"
+
+    if incremental_col:
+        query += f"WHERE {incremental_col} > {max_incremental_value}\n"
+    
+    
+    return query
+
+
 
 
 def print_progress(records, message="Extracted records so far"):
