@@ -37,6 +37,11 @@ db_2_duckdb_job = define_asset_job(name="db_2_duckdb", selection=["get_table_map
 
 adls_2_duckdb_job = define_asset_job(name="adls_2_duckdb", selection=["get_table_mapping_adls", "get_field_mapping_adls", "get_source_data_adls", "transform_data_adls", "add_destination_data_adls"])
 
+duckdb_2_duckdb_job = define_asset_job(name="duckdb_2_duckdb", selection=["get_table_mapping_duckdb_duckdb", 
+                                                                          "get_field_mapping_duckdb_duckdb", 
+                                                                          "get_source_data_duckdb_duckdb", 
+                                                                          "transform_data_duckdb_duckdb", 
+                                                                          "add_destination_data_duckdb_duckdb"])
 
 # List all active sensors
 sensors = [
@@ -52,7 +57,8 @@ defs = Definitions(
     jobs=[  
             db_2_db_job,
             db_2_duckdb_job,
-            adls_2_duckdb_job
+            adls_2_duckdb_job,
+            duckdb_2_duckdb_job
         ],
     schedules = [ db_to_db_schedule ],
     sensors = sensors ,
