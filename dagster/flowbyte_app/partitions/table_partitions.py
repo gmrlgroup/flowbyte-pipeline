@@ -60,7 +60,9 @@ def get_databases(source_type, destination_type):
     if env == "DEV":
         log.log_info(df)
 
-    df['database_id'] = df['source_host'].astype(str) + "/" + df['source_database'].astype(str)
+    df['database_id'] = df['source_host'].str.replace(':', 'windows') + "/" + df['source_database'].astype(str)
+    # df['database_id'] = df['source_host'].astype(str) + "/" + df['source_database'].astype(str)
+    
 
 
     return df['database_id'].unique().tolist()
@@ -106,8 +108,10 @@ def get_tables(source_type, destination_type):
     if df.empty:
         return ([], [], [])
 
-    df['source_database_id'] = df['source_host'].astype(str) + "/" + df['source_database'].astype(str) + "/" + df['source_table'].astype(str)
-    df['destination_database_id'] = df['destination_host'].astype(str) + "/" + df['destination_database'].astype(str) + "/" + df['destination_table'].astype(str)
+    df['source_database_id'] = df['source_host'].str.replace(':', 'windows') + "/" + df['source_database'].astype(str) + "/" + df['source_table'].astype(str)
+    df['destination_database_id'] = df['destination_host'].str.replace(':', 'windows') + "/" + df['destination_database'].astype(str) + "/" + df['destination_table'].astype(str)
+    # df['source_database_id'] = df['source_host'].astype(str) + "/" + df['source_database'].astype(str) + "/" + df['source_table'].astype(str)
+    # df['destination_database_id'] = df['destination_host'].astype(str) + "/" + df['destination_database'].astype(str) + "/" + df['destination_table'].astype(str)
     df['partition_key'] = df['destination_database_id'].astype(str) + "|" + df['source_database_id'].astype(str)
 
     source_databases = df['source_database_id'].unique().tolist() if df['source_database_id'].notnull().any() else []
@@ -127,6 +131,8 @@ source_adls_tables, destination_duckdb_tables, partition_keys = get_tables('adls
 
 source_db_tables, destination_duckdb_tables_2, partition_keys = get_tables('mssql', 'duckdb')
 
+source_duckdb_tables, destination_duckdb_tables_3, partition_keys = get_tables('duckdb', 'duckdb')
+
 # database_partitions = StaticPartitionsDefinition(get_databases('mssql', 'mssql'))
 # adls_duckdb_partitions = StaticPartitionsDefinition(get_databases('adls', 'duckdb'))
 
@@ -143,6 +149,9 @@ duckdb_dest_table_partitions = StaticPartitionsDefinition(destination_duckdb_tab
 db_source_table_partitions = StaticPartitionsDefinition(source_db_tables)
 duckdb_dest_table_partitions_2 = StaticPartitionsDefinition(destination_duckdb_tables_2)
 
+duckdb_source_table_partitions = StaticPartitionsDefinition(source_duckdb_tables)
+duckdb_dest_table_partitions_3 = StaticPartitionsDefinition(destination_duckdb_tables_3)
+
 # Create two PartitionDefinitions
 db_to_db_partitions = MultiPartitionsDefinition(
     {"source": source_table_partitions, "destination": destination_table_partitions}
@@ -150,5 +159,14 @@ db_to_db_partitions = MultiPartitionsDefinition(
 
 adls_to_duckdb_partitions = MultiPartitionsDefinition(
     {"source": db_source_table_partitions, "destination": duckdb_dest_table_partitions_2}
+)
+
+
+adls_to_duckdb_partitions = MultiPartitionsDefinition(
+    {"source": db_source_table_partitions, "destination": duckdb_dest_table_partitions_2}
+)
+
+duckdb_to_duckdb_partitions = MultiPartitionsDefinition(
+    {"source": duckdb_source_table_partitions, "destination": duckdb_dest_table_partitions_3}
 )
 
