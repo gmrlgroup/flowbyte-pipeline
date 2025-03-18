@@ -47,10 +47,12 @@ def get_table_mapping_duckdb(context):
     destination_key = partition_key["destination"]
 
     source_host = "/".join(source_key.split("/")[:-2])
+    source_host = source_host.replace('windows', ':')
     source_db = source_key.split("/")[-2]
     table_name = source_key.split("/")[-1]
 
     destination_host = "/".join(destination_key.split("/")[:-2])
+    destination_host = destination_host.replace('windows', ':')
     destination_db = destination_key.split("/")[-2]
     destination_table_name = destination_key.split("/")[-1]
 
@@ -115,10 +117,12 @@ def get_field_mapping_duckdb(context):
     destination_key = partition_key["destination"]
 
     source_host = "/".join(source_key.split("/")[:-2])
+    source_host = source_host.replace('windows', ':')
     source_db = source_key.split("/")[-2]
     table_name = source_key.split("/")[-1]
 
     destination_host = "/".join(destination_key.split("/")[:-2])
+    destination_host = destination_host.replace('windows', ':')
     destination_db = destination_key.split("/")[-2]
     destination_table_name = destination_key.split("/")[-1]
 
@@ -188,6 +192,9 @@ def get_source_data_duckdb(context, get_table_mapping_duckdb, get_field_mapping_
     source_host = table_mapping_no_attribute['source_host'].iloc[0]
     source_database = table_mapping_no_attribute['source_database'].iloc[0]
     source_schema = table_mapping_no_attribute['source_schema'].iloc[0]
+
+    source_host = source_host.replace('windows', ':')
+    destination_host = destination_host.replace('windows', ':')
     
     
     # get db credentials where database name is equal to the source database and host is equal to the source host
@@ -396,6 +403,8 @@ def add_destination_data_duckdb(context, get_table_mapping_duckdb, get_field_map
 
     destination_host = table_mapping['destination_host'].iloc[0]
     destination_database = table_mapping['destination_database'].iloc[0]
+
+    destination_host = destination_host.replace('windows', ':')
 
     df_credentials = sql.get_db_credentials()
     db_credentials = df_credentials[(df_credentials['database_name'] == destination_database) & (df_credentials['host'] == destination_host)]
