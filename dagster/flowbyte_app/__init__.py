@@ -11,7 +11,7 @@ from dagster import (
     
 )
 
-from flowbyte_app.assets import integration
+from flowbyte_app.assets import integration, governance
 from flowbyte_app.sensors import notification_sensors as ns
 from flowbyte_app.partitions import db_to_db_partitions
 from flowbyte_app.schedules import db_to_db_schedule
@@ -26,6 +26,7 @@ SEND_SUCCESS_NOTIFICATION = os.getenv("SEND_SUCCESS_NOTIFICATION", "false").lowe
 
 
 integration_assets = load_assets_from_modules([integration])
+governance_assets = load_assets_from_modules([governance])
 
 
 

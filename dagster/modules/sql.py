@@ -76,6 +76,32 @@ def get_db_credentials():
 
 
 
+def get_db_credentials(host, database_name):
+
+
+    server, database, username, password = get_connection_details("SETUP")
+
+    sql_setup = MSSQL(
+        host=server,
+        username=username,
+        password=password,
+        database=database,
+        driver="ODBC Driver 17 for SQL Server",
+        connection_type="sqlalchemy"
+
+        )
+    
+    query = f"""SELECT * FROM [data].[database_credentials]
+                WHERE host = '{host}' AND database_name = '{database_name}'"""
+
+    sql_setup.connect()
+
+    df = sql_setup.get_data(query, chunksize=1000)
+
+    return df
+
+
+
 def init_sql(db_credentials):
     host = db_credentials['host'].iloc[0]
     database = db_credentials['database_name'].iloc[0]
