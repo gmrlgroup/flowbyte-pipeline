@@ -55,6 +55,11 @@ def get_table_mapping_adls(context):
     destination_db = destination_key.split("/")[-2]
     destination_table_name = destination_key.split("/")[-1]
 
+    if 'file.core.windows.net' not in source_host:
+        source_host = source_host.replace('windows', ':')
+    if 'file.core.windows.net' not in destination_host:
+        destination_host = destination_host.replace('windows', ':')
+
     # source_host = context.partition_key.split("/")[0]
     # source_db = context.partition_key.split("/")[1]
     # table_name = context.partition_key.split("/")[2]
@@ -73,6 +78,7 @@ def get_table_mapping_adls(context):
                         tm.[destination_host],
                         tm.[destination_database],
                         tm.[destination_table],
+                        tm.[destination_schema],
                         tm.[destination_api_endpoint],
                         tm.[query],
                         tm.[is_attribute],
@@ -128,6 +134,11 @@ def get_field_mapping_adls(context):
     destination_host = "/".join(destination_key.split("/")[:-2])
     destination_db = destination_key.split("/")[-2]
     destination_table_name = destination_key.split("/")[-1]
+
+    if 'file.core.windows.net' not in source_host:
+        source_host = source_host.replace('windows', ':')
+    if 'file.core.windows.net' not in destination_host:
+        destination_host = destination_host.replace('windows', ':')
 
 
     sql_setup.connect()
@@ -192,6 +203,11 @@ def get_source_data_adls(context, get_table_mapping_adls, get_field_mapping_adls
     destination_database = table_mapping_no_attribute['destination_database'].iloc[0]
     source_host = table_mapping_no_attribute['source_host'].iloc[0]
     source_database = table_mapping_no_attribute['source_database'].iloc[0]
+
+    if 'file.core.windows.net' not in source_host:
+        source_host = source_host.replace('windows', ':')
+    if 'file.core.windows.net' not in destination_host:
+        destination_host = destination_host.replace('windows', ':')
     
     # get db credentials where database name is equal to the source database and host is equal to the source host
     df_credentials = sql.get_db_credentials()
@@ -245,11 +261,14 @@ def get_source_data_adls(context, get_table_mapping_adls, get_field_mapping_adls
         # filters are the table_mapping source_tables
         
         # Generate file paths using list_blobs_in_directory()
-        filters= {"year": ["2022"], "month": ["01"]} # ,"month":["01","02","03","04"]
+        # filters= {"year": ["2022"], "month": ["01"]} # ,"month":["01","02","03","04"]
+        if config.filters:
+            filters = config.filters
+        else:
+            filters = None
         
         # file_paths = ml.list_blobs_in_directory(container_name, fs, "sales.parquet") # ,filters=filters
-        file_paths, fs = adls_connection.list_blobs_in_directory(file_name=table_name, fs=None, filters=filters)
-
+        file_paths, fs = adls_connection.list_blobs_in_directory(file_name=table_name, fs=None, filters=filters) 
 
         # Read parquet files into DataFrames and concatenate them
         dfs = []
@@ -446,6 +465,8 @@ def add_destination_data_adls(context, get_table_mapping_adls, get_field_mapping
     # field_mapping = get_field_mapping_adls
 
     destination_host = table_mapping['destination_host'].iloc[0]
+    if 'file.core.windows.net' not in destination_host:
+        destination_host = destination_host.replace('windows', ':')
     destination_database = table_mapping['destination_database'].iloc[0]
 
     df_credentials = sql.get_db_credentials()
@@ -456,7 +477,7 @@ def add_destination_data_adls(context, get_table_mapping_adls, get_field_mapping
     table_name = table_mapping['destination_table'].iloc[0]
     is_incremental = table_mapping['is_incremental'].iloc[0]
     temp_schema = os.getenv('TEMP_SCHEMA') or "tmp"
-    schema = "dbo"
+    schema = table_mapping['destination_schema'].iloc[0]
     temp_table_name = table_mapping['temp_table_name'].iloc[0]
 
     db = f"{destination_host}/{destination_database}.duckdb"

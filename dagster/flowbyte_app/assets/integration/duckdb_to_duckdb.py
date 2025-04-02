@@ -4,7 +4,7 @@ from dagster import MetadataValue, Output, asset, StaticPartitionsDefinition, Mu
 from flowbyte.sql import MSSQL
 import os
 import duckdb
-from flowbyte_app.partitions import adls_to_duckdb_partitions
+from flowbyte_app.partitions import duckdb_to_duckdb_partitions
 
 
 import sys
@@ -34,8 +34,8 @@ sql_setup = MSSQL(
 
 
 
-@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="sql", group_name="config", io_manager_key="parquet_io_manager", partitions_def=adls_to_duckdb_partitions)
-def get_table_mapping_duckdb(context):
+@asset(owners=["romy.bouabdo@gmrlgroup.com", "team:data-eng"], compute_kind="sql", group_name="config", io_manager_key="parquet_io_manager", partitions_def=duckdb_to_duckdb_partitions)
+def get_table_mapping_duckdb_duckdb(context):
     """
     Get Table Mappings
     """
@@ -46,15 +46,22 @@ def get_table_mapping_duckdb(context):
     source_key = partition_key["source"]
     destination_key = partition_key["destination"]
 
+    # c:/duckdb/storage/sales_dataset/sales_line
     source_host = "/".join(source_key.split("/")[:-2])
+
     if 'file.core.windows.net' not in source_host:
         source_host = source_host.replace('windows', ':')
+  
+
     source_db = source_key.split("/")[-2]
     table_name = source_key.split("/")[-1]
 
+
     destination_host = "/".join(destination_key.split("/")[:-2])
+
     if 'file.core.windows.net' not in destination_host:
         destination_host = destination_host.replace('windows', ':')
+
     destination_db = destination_key.split("/")[-2]
     destination_table_name = destination_key.split("/")[-1]
 
@@ -86,7 +93,7 @@ def get_table_mapping_duckdb(context):
             AND [destination_table] = '{destination_table_name}' AND destination_host = '{destination_host}' AND destination_database = '{destination_db}'
             AND tm.[is_deleted] = 0
 
-            AND source.[type] = 'mssql' AND destincation.[type] = 'duckdb'
+            AND source.[type] = 'duckdb' AND destincation.[type] = 'duckdb'
 
             """
 
@@ -94,6 +101,7 @@ def get_table_mapping_duckdb(context):
         log.log_debug(f"DEBUG: {query}")
 
     df = sql_setup.get_data(query, chunksize=1000)
+    log.log_info(df)
     
 
     if env == "DEV":
@@ -107,8 +115,8 @@ def get_table_mapping_duckdb(context):
 
 
 
-@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="sql", group_name="config", io_manager_key="parquet_io_manager", partitions_def=adls_to_duckdb_partitions)
-def get_field_mapping_duckdb(context):
+@asset(owners=["romy.bouabdo@gmrlgroup.com", "team:data-eng"], compute_kind="sql", group_name="config", io_manager_key="parquet_io_manager", partitions_def=duckdb_to_duckdb_partitions)
+def get_field_mapping_duckdb_duckdb(context):
     """
     Get Field Mappings
     """
@@ -119,15 +127,21 @@ def get_field_mapping_duckdb(context):
     source_key = partition_key["source"]
     destination_key = partition_key["destination"]
 
+
     source_host = "/".join(source_key.split("/")[:-2])
+
     if 'file.core.windows.net' not in source_host:
         source_host = source_host.replace('windows', ':')
+
     source_db = source_key.split("/")[-2]
     table_name = source_key.split("/")[-1]
 
+
     destination_host = "/".join(destination_key.split("/")[:-2])
+
     if 'file.core.windows.net' not in destination_host:
         destination_host = destination_host.replace('windows', ':')
+
     destination_db = destination_key.split("/")[-2]
     destination_table_name = destination_key.split("/")[-1]
 
@@ -162,7 +176,7 @@ def get_field_mapping_duckdb(context):
                 AND [destination_table] = '{destination_table_name}' AND destination_host = '{destination_host}' AND destination_database = '{destination_db}'
 
 
-                AND source.[type] = 'mssql' AND destincation.[type] = 'duckdb'
+                AND source.[type] = 'duckdb' AND destincation.[type] = 'duckdb'
             """
 
     if env == "DEV":
@@ -182,14 +196,18 @@ def get_field_mapping_duckdb(context):
 
 
 
-@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="sql", group_name="extract", io_manager_key="parquet_io_manager", partitions_def=adls_to_duckdb_partitions)
-def get_source_data_duckdb(context, get_table_mapping_duckdb, get_field_mapping_duckdb, config: models.QueryModel):
+@asset(owners=["romy.bouabdo@gmrlgroup.com", "team:data-eng"], compute_kind="sql", group_name="extract", io_manager_key="parquet_io_manager", partitions_def=duckdb_to_duckdb_partitions)
+def get_source_data_duckdb_duckdb(context, get_table_mapping_duckdb_duckdb, get_field_mapping_duckdb_duckdb, config: models.QueryModel):
     """
     Get Data from Source
     """
 
-    log.log_debug(f'Table Mapping: {get_table_mapping_duckdb}')
-    table_mapping = get_table_mapping_duckdb
+    # partition_key: MultiPartitionKey = context.partition_key.keys_by_dimension
+    # destination_key = partition_key["destination"]
+    # destination_table_name = destination_key.split("/")[-1]
+
+    log.log_debug(f'Table Mapping: {get_table_mapping_duckdb_duckdb}')
+    table_mapping = get_table_mapping_duckdb_duckdb
     table_mapping_no_attribute = table_mapping[table_mapping['is_attribute'] == 0]
 
     destination_host = table_mapping_no_attribute['destination_host'].iloc[0]
@@ -197,11 +215,7 @@ def get_source_data_duckdb(context, get_table_mapping_duckdb, get_field_mapping_
     source_host = table_mapping_no_attribute['source_host'].iloc[0]
     source_database = table_mapping_no_attribute['source_database'].iloc[0]
     source_schema = table_mapping_no_attribute['source_schema'].iloc[0]
-
-    if 'file.core.windows.net' not in source_host:
-        source_host = source_host.replace('windows', ':')
-    if 'file.core.windows.net' not in destination_host:
-        destination_host = destination_host.replace('windows', ':')
+    destination_table_name = table_mapping_no_attribute['destination_table'].iloc[0]
     
     
     # get db credentials where database name is equal to the source database and host is equal to the source host
@@ -210,18 +224,31 @@ def get_source_data_duckdb(context, get_table_mapping_duckdb, get_field_mapping_
     db_credentials_dest = df_credentials[(df_credentials['database_name'] == destination_database) & (df_credentials['host'] == destination_host)]
     
 
-    sql_source = sql.init_sql(db_credentials_source)
-    sql_source.connect()
+    # sql_source = sql.init_sql(db_credentials_source)
+    # sql_source.connect()
+
+    # replace cwindows to C:
+    if 'file.core.windows.net' not in source_host:
+        source_host = source_host.replace('windows', ':')
+    if 'file.core.windows.net' not in destination_host:
+        destination_host = destination_host.replace('windows', ':')
+
+    source_db = f"{source_host}/{source_database}.duckdb"
+    destination_db = f"{destination_host}/{destination_database}.duckdb"
 
 
-    sql_destination = sql.init_sql(db_credentials_dest)
-    sql_destination.connect()
+    source_con = duckdb.connect(source_db, read_only = False)
+    destination_con = duckdb.connect(destination_db, read_only = False)
+
+
+    # sql_destination = sql.init_sql(db_credentials_dest)
+    # sql_destination.connect()
 
     # check if table is_attribute is True
     is_incremental = table_mapping['is_incremental'].iloc[0]
     incremental_col = table_mapping['incremental_column'].iloc[0]
 
-    field_mapping = get_field_mapping_duckdb
+    field_mapping = get_field_mapping_duckdb_duckdb
 
     # convert field_mapping to dictionary
     mapping_data = field_mapping.to_dict(orient='records')
@@ -242,11 +269,16 @@ def get_source_data_duckdb(context, get_table_mapping_duckdb, get_field_mapping_
     else:
         if is_incremental:
             incremental_col = table_mapping['incremental_column'].iloc[0]
-            max_incremental_value = sql.get_max_incremental_value(sql=sql_destination, table_mapping=table_mapping_no_attribute, incremental_col=incremental_col)
-            query = sql.generate_query(table_mapping_no_attribute, mapping_data, incremental_col, max_incremental_value, schema=source_schema)
+            # max_incremental_value = sql.get_max_incremental_value(sql=sql_destination, table_mapping=table_mapping_no_attribute, incremental_col=incremental_col)
+            max_incremental_query = f"""
+            SELECT MAX({incremental_col}) as cdc_key FROM {destination_table_name}
+            """
+            max_incremental_df = destination_con.execute(max_incremental_query).fetchdf()
+            max_incremental_value = max_incremental_df['cdc_key'].iloc[0]
+            query = sql.generate_duckdb_query(table_mapping_no_attribute, mapping_data, incremental_col, max_incremental_value, schema=source_schema)
 
         else:
-            query = sql.generate_query(table_mapping_no_attribute, mapping_data, schema=source_schema)
+            query = sql.generate_duckdb_query(table_mapping_no_attribute, mapping_data, schema=source_schema)
             if config.where:
                 query += f"WHERE {config.where}"
 
@@ -257,32 +289,33 @@ def get_source_data_duckdb(context, get_table_mapping_duckdb, get_field_mapping_
         log.log_debug(f"Query: {query}")
 
 
-    object_columns = []
-    float_columns = []
-    integer_columns = []
+    # object_columns = []
+    # float_columns = []
+    # integer_columns = []
     # obcjec columns start with NVARCHAR
-    object_columns = field_mapping[field_mapping['source_data_type'].str.contains('TEXT')]
-    object_columns = object_columns['source_column'].tolist()
+    # object_columns = field_mapping[field_mapping['source_data_type'].str.contains('TEXT')]
+    # object_columns = object_columns['source_column'].tolist()
 
-    # int columns contains INT
-    integer_columns = field_mapping[field_mapping['source_data_type'].str.contains('INT')]
-    integer_columns = integer_columns['source_column'].tolist()
+    # # int columns contains INT
+    # integer_columns = field_mapping[field_mapping['source_data_type'].str.contains('INT')]
+    # integer_columns = integer_columns['source_column'].tolist()
 
-    # float columns contains DECIMAL
-    float_columns = field_mapping[field_mapping['source_data_type'].str.contains('DECIMAL')]
-    float_columns = float_columns['source_column'].tolist()
+    # # float columns contains DECIMAL
+    # float_columns = field_mapping[field_mapping['source_data_type'].str.contains('DECIMAL')]
+    # float_columns = float_columns['source_column'].tolist()
 
 
-    if env == "DEV":
-        log.log_debug(f"Object Columns: {object_columns}")
-        log.log_debug(f"Integer Columns: {integer_columns}")
-        log.log_debug(f"Float Columns: {float_columns}")
+    # if env == "DEV":
+    #     log.log_debug(f"Object Columns: {object_columns}")
+    #     log.log_debug(f"Integer Columns: {integer_columns}")
+    #     log.log_debug(f"Float Columns: {float_columns}")
 
-        log.log_debug(f"HOST: {sql_source.host}")
-        log.log_debug(f"DATABASE: {sql_source.database}")
+        # log.log_debug(f"HOST: {sql_source.host}")
+        # log.log_debug(f"DATABASE: {sql_source.database}")
 
-    df = sql_source.get_data(query, chunksize=100000, object_columns=object_columns, float_columns=float_columns, integer_columns=integer_columns, progress_callback=sql.print_progress, message="Extracted ")
-
+    # df = sql_source.get_data(query, chunksize=100000, object_columns=object_columns, float_columns=float_columns, integer_columns=integer_columns, progress_callback=sql.print_progress, message="Extracted ")
+    df = source_con.execute(query).fetchdf()
+    source_con.close()
     metadata = {
         "row_sql": MetadataValue.md("```SQL\n" + query + "\n```")
     }
@@ -290,20 +323,20 @@ def get_source_data_duckdb(context, get_table_mapping_duckdb, get_field_mapping_
     return Output(value=df, metadata=metadata)
 
 
-@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="sql", group_name="transform", io_manager_key="parquet_io_manager", partitions_def=adls_to_duckdb_partitions)
-def transform_data_duckdb(context, get_table_mapping_duckdb, get_field_mapping_duckdb, get_source_data_duckdb):
+@asset(owners=["romy.bouabdo@gmrlgroup.com", "team:data-eng"], compute_kind="sql", group_name="transform", io_manager_key="parquet_io_manager", partitions_def=duckdb_to_duckdb_partitions)
+def transform_data_duckdb_duckdb(context, get_table_mapping_duckdb_duckdb, get_field_mapping_duckdb_duckdb, get_source_data_duckdb_duckdb):
     """
     Transform Data
     """
 
-    df = get_source_data_duckdb
+    df = get_source_data_duckdb_duckdb
 
     log.log_info(df)
 
     if df is None or  df.empty:
         return Output(value=df)
 
-    field_mapping = get_field_mapping_duckdb
+    field_mapping = get_field_mapping_duckdb_duckdb
 
     log.log_info(field_mapping)
 
@@ -390,15 +423,15 @@ def transform_data_duckdb(context, get_table_mapping_duckdb, get_field_mapping_d
 
 
 
-@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="api", group_name="load", io_manager_key="parquet_io_manager", partitions_def=adls_to_duckdb_partitions)
-def add_destination_data_duckdb(context, get_table_mapping_duckdb, get_field_mapping_duckdb, transform_data_duckdb):
+@asset(owners=["romy.bouabdo@gmrlgroup.com", "team:data-eng"], compute_kind="api", group_name="load", io_manager_key="parquet_io_manager", partitions_def=duckdb_to_duckdb_partitions)
+def add_destination_data_duckdb_duckdb(context, get_table_mapping_duckdb_duckdb, get_field_mapping_duckdb_duckdb, transform_data_duckdb_duckdb):
     """
     Add Data to Destination
     """
 
     
 
-    df = transform_data_duckdb
+    df = transform_data_duckdb_duckdb
 
     log.log_info(f"INFO: {df.dtypes}")
 
@@ -407,14 +440,11 @@ def add_destination_data_duckdb(context, get_table_mapping_duckdb, get_field_map
     
     # Get table_name for partition
     
-    table_mapping = get_table_mapping_duckdb[get_table_mapping_duckdb['is_attribute'] == 0]
-    # field_mapping = get_field_mapping_duckdb
+    table_mapping = get_table_mapping_duckdb_duckdb[get_table_mapping_duckdb_duckdb['is_attribute'] == 0]
+    # field_mapping = get_field_mapping_duckdb_duckdb
 
     destination_host = table_mapping['destination_host'].iloc[0]
     destination_database = table_mapping['destination_database'].iloc[0]
-
-    if 'file.core.windows.net' not in destination_host:
-        destination_host = destination_host.replace('windows', ':')
 
     df_credentials = sql.get_db_credentials()
     db_credentials = df_credentials[(df_credentials['database_name'] == destination_database) & (df_credentials['host'] == destination_host)]
@@ -427,6 +457,7 @@ def add_destination_data_duckdb(context, get_table_mapping_duckdb, get_field_map
     schema = table_mapping['destination_schema'].iloc[0]
     temp_table_name = table_mapping['temp_table_name'].iloc[0]
 
+    # destination_host = destination_host.replace("cwindows", "C:")
     db = f"{destination_host}/{destination_database}.duckdb"
     # db = f"{destination_database}"
     con = duckdb.connect(db)  # Use ":memory:" for in-memory DB

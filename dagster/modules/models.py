@@ -38,10 +38,9 @@ class PandasParquetIOManager(UPathIOManager):
 
     def dump_to_path(self, context: OutputContext, obj: object, path: UPath):
         
-        storage_path = os.getenv('STORAGE_PATH')
-        
-       
-       # Determine the file extension based on the object type
+        storage_path = os.getenv('STORAGE_PATH') 
+
+        # Determine the file extension based on the object type
         if isinstance(obj, (list, dict)):
             self.extension = ".json"
         elif isinstance(obj, str):
@@ -58,7 +57,7 @@ class PandasParquetIOManager(UPathIOManager):
                 partition_path = str(context.asset_partition_key)  # Single partition
 
             partition_path = partition_path.replace("|", "\\")
-            partition_path = partition_path.replace(":", "")
+            partition_path = partition_path[:2] + partition_path[2:].replace(":", "") 
 
             path = UPath(f"{storage_path}/{context.asset_key.path[0]}/{partition_path}{self.extension}")
         else:
@@ -89,7 +88,6 @@ class PandasParquetIOManager(UPathIOManager):
         storage_path = os.getenv('STORAGE_PATH')
 
 
-
         if context.has_partition_key:
             
             if isinstance(context.asset_partition_key, tuple):# Check if it's multi-dimensional
@@ -98,7 +96,8 @@ class PandasParquetIOManager(UPathIOManager):
                 partition_path = str(context.asset_partition_key)  # Single partition
 
             partition_path = partition_path.replace("|", "\\")
-            partition_path = partition_path.replace(":", "")
+            partition_path = partition_path[:2] + partition_path[2:].replace(":", "")
+             
             # e.g. /my_storage/some_asset/partition_key
             base_path = UPath(os.path.join(storage_path, context.asset_key.path[0], partition_path))
         else:
@@ -210,6 +209,7 @@ class PandasParquetIOManager(UPathIOManager):
                     
 class QueryModel(Config):
     query: Optional[str] = None
+    where: Optional[str] = None
 
 
 
