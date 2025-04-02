@@ -34,7 +34,7 @@ sql_setup = MSSQL(
 
 
 
-@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="sql", group_name="config", io_manager_key="parquet_io_manager", partitions_def=duckdb_to_duckdb_partitions)
+@asset(owners=["romy.bouabdo@gmrlgroup.com", "team:data-eng"], compute_kind="sql", group_name="config", io_manager_key="parquet_io_manager", partitions_def=duckdb_to_duckdb_partitions)
 def get_table_mapping_duckdb_duckdb(context):
     """
     Get Table Mappings
@@ -49,7 +49,9 @@ def get_table_mapping_duckdb_duckdb(context):
     # c:/duckdb/storage/sales_dataset/sales_line
     source_host = "/".join(source_key.split("/")[:-2])
 
-    source_host = source_host.replace('windows', ':')
+    if 'file.core.windows.net' not in source_host:
+        source_host = source_host.replace('windows', ':')
+  
 
     source_db = source_key.split("/")[-2]
     table_name = source_key.split("/")[-1]
@@ -57,7 +59,8 @@ def get_table_mapping_duckdb_duckdb(context):
 
     destination_host = "/".join(destination_key.split("/")[:-2])
 
-    destination_host = destination_host.replace('windows', ':')
+    if 'file.core.windows.net' not in destination_host:
+        destination_host = destination_host.replace('windows', ':')
 
     destination_db = destination_key.split("/")[-2]
     destination_table_name = destination_key.split("/")[-1]
@@ -72,6 +75,7 @@ def get_table_mapping_duckdb_duckdb(context):
                         tm.[destination_host],
                         tm.[destination_database],
                         tm.[destination_table],
+                        tm.[destination_schema],
                         tm.[destination_api_endpoint],
                         tm.[query],
                         tm.[is_attribute],
@@ -111,7 +115,7 @@ def get_table_mapping_duckdb_duckdb(context):
 
 
 
-@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="sql", group_name="config", io_manager_key="parquet_io_manager", partitions_def=duckdb_to_duckdb_partitions)
+@asset(owners=["romy.bouabdo@gmrlgroup.com", "team:data-eng"], compute_kind="sql", group_name="config", io_manager_key="parquet_io_manager", partitions_def=duckdb_to_duckdb_partitions)
 def get_field_mapping_duckdb_duckdb(context):
     """
     Get Field Mappings
@@ -126,7 +130,8 @@ def get_field_mapping_duckdb_duckdb(context):
 
     source_host = "/".join(source_key.split("/")[:-2])
 
-    source_host = source_host.replace('windows', ':')
+    if 'file.core.windows.net' not in source_host:
+        source_host = source_host.replace('windows', ':')
 
     source_db = source_key.split("/")[-2]
     table_name = source_key.split("/")[-1]
@@ -134,7 +139,8 @@ def get_field_mapping_duckdb_duckdb(context):
 
     destination_host = "/".join(destination_key.split("/")[:-2])
 
-    destination_host = destination_host.replace('windows', ':')
+    if 'file.core.windows.net' not in destination_host:
+        destination_host = destination_host.replace('windows', ':')
 
     destination_db = destination_key.split("/")[-2]
     destination_table_name = destination_key.split("/")[-1]
@@ -190,7 +196,7 @@ def get_field_mapping_duckdb_duckdb(context):
 
 
 
-@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="sql", group_name="extract", io_manager_key="parquet_io_manager", partitions_def=duckdb_to_duckdb_partitions)
+@asset(owners=["romy.bouabdo@gmrlgroup.com", "team:data-eng"], compute_kind="sql", group_name="extract", io_manager_key="parquet_io_manager", partitions_def=duckdb_to_duckdb_partitions)
 def get_source_data_duckdb_duckdb(context, get_table_mapping_duckdb_duckdb, get_field_mapping_duckdb_duckdb, config: models.QueryModel):
     """
     Get Data from Source
@@ -222,8 +228,10 @@ def get_source_data_duckdb_duckdb(context, get_table_mapping_duckdb_duckdb, get_
     # sql_source.connect()
 
     # replace cwindows to C:
-    source_host = source_host.replace('windows', ':')
-    destination_host = destination_host.replace('windows', ':')
+    if 'file.core.windows.net' not in source_host:
+        source_host = source_host.replace('windows', ':')
+    if 'file.core.windows.net' not in destination_host:
+        destination_host = destination_host.replace('windows', ':')
 
     source_db = f"{source_host}/{source_database}.duckdb"
     destination_db = f"{destination_host}/{destination_database}.duckdb"
@@ -271,6 +279,8 @@ def get_source_data_duckdb_duckdb(context, get_table_mapping_duckdb_duckdb, get_
 
         else:
             query = sql.generate_duckdb_query(table_mapping_no_attribute, mapping_data, schema=source_schema)
+            if config.where:
+                query += f"WHERE {config.where}"
 
             log.log_info(f"Non Incremental Query: {query}")
     
@@ -313,7 +323,7 @@ def get_source_data_duckdb_duckdb(context, get_table_mapping_duckdb_duckdb, get_
     return Output(value=df, metadata=metadata)
 
 
-@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="sql", group_name="transform", io_manager_key="parquet_io_manager", partitions_def=duckdb_to_duckdb_partitions)
+@asset(owners=["romy.bouabdo@gmrlgroup.com", "team:data-eng"], compute_kind="sql", group_name="transform", io_manager_key="parquet_io_manager", partitions_def=duckdb_to_duckdb_partitions)
 def transform_data_duckdb_duckdb(context, get_table_mapping_duckdb_duckdb, get_field_mapping_duckdb_duckdb, get_source_data_duckdb_duckdb):
     """
     Transform Data
@@ -413,7 +423,7 @@ def transform_data_duckdb_duckdb(context, get_table_mapping_duckdb_duckdb, get_f
 
 
 
-@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="api", group_name="load", io_manager_key="parquet_io_manager", partitions_def=duckdb_to_duckdb_partitions)
+@asset(owners=["romy.bouabdo@gmrlgroup.com", "team:data-eng"], compute_kind="api", group_name="load", io_manager_key="parquet_io_manager", partitions_def=duckdb_to_duckdb_partitions)
 def add_destination_data_duckdb_duckdb(context, get_table_mapping_duckdb_duckdb, get_field_mapping_duckdb_duckdb, transform_data_duckdb_duckdb):
     """
     Add Data to Destination
@@ -444,7 +454,7 @@ def add_destination_data_duckdb_duckdb(context, get_table_mapping_duckdb_duckdb,
     table_name = table_mapping['destination_table'].iloc[0]
     is_incremental = table_mapping['is_incremental'].iloc[0]
     temp_schema = os.getenv('TEMP_SCHEMA') or "tmp"
-    schema = "dbo"
+    schema = table_mapping['destination_schema'].iloc[0]
     temp_table_name = table_mapping['temp_table_name'].iloc[0]
 
     # destination_host = destination_host.replace("cwindows", "C:")

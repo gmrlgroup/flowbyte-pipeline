@@ -69,8 +69,10 @@ def get_table_mapping(context):
     destination_db = destination_key.split("/")[1]
     destination_table_name = destination_key.split("/")[2]
 
-    source_host = source_host.replace('windows', ':')
-    destination_host = destination_host.replace('windows', ':')
+    if 'file.core.windows.net' not in source_host:
+        source_host = source_host.replace('windows', ':')
+    if 'file.core.windows.net' not in destination_host:
+        destination_host = destination_host.replace('windows', ':')
 
     # source_host = context.partition_key.split("/")[0]
     # source_db = context.partition_key.split("/")[1]
@@ -86,6 +88,7 @@ def get_table_mapping(context):
                         tm.[destination_host],
                         tm.[destination_database],
                         tm.[destination_table],
+                        tm.[destination_schema],
                         tm.[destination_api_endpoint],
                         tm.[query],
                         tm.[is_attribute],
@@ -143,8 +146,10 @@ def get_field_mapping(context):
     destination_db = destination_key.split("/")[1]
     destination_table_name = destination_key.split("/")[2]
 
-    source_host = source_host.replace('windows', ':')
-    destination_host = destination_host.replace('windows', ':')
+    if 'file.core.windows.net' not in source_host:
+        source_host = source_host.replace('windows', ':')
+    if 'file.core.windows.net' not in destination_host:
+        destination_host = destination_host.replace('windows', ':')
 
 
 
@@ -210,8 +215,10 @@ def get_source_data(context, get_db_credentials, get_table_mapping, get_field_ma
     source_host = table_mapping_no_attribute['source_host'].iloc[0]
     source_database = table_mapping_no_attribute['source_database'].iloc[0]
 
-    source_host = source_host.replace('windows', ':')
-    destination_host = destination_host.replace('windows', ':')
+    if 'file.core.windows.net' not in source_host:
+        source_host = source_host.replace('windows', ':')
+    if 'file.core.windows.net' not in destination_host:
+        destination_host = destination_host.replace('windows', ':')
     
     # get db credentials where database name is equal to the source database and host is equal to the source host
     db_credentials_source = get_db_credentials[(get_db_credentials['database_name'] == source_database) & (get_db_credentials['host'] == source_host)]
@@ -255,6 +262,8 @@ def get_source_data(context, get_db_credentials, get_table_mapping, get_field_ma
 
         else:
             query = sql.generate_query(table_mapping_no_attribute, mapping_data)
+            if config.where:
+                query += f"WHERE {config.where}"
     
     
     if env == "DEV":
@@ -426,7 +435,8 @@ def add_destination_data(context, get_db_credentials, get_table_mapping, get_fie
     destination_host = table_mapping['destination_host'].iloc[0]
     destination_database = table_mapping['destination_database'].iloc[0]
 
-    destination_host = destination_host.replace('windows', ':')
+    if 'file.core.windows.net' not in destination_host:
+        destination_host = destination_host.replace('windows', ':')
 
     db_credentials = get_db_credentials[(get_db_credentials['database_name'] == destination_database) & (get_db_credentials['host'] == destination_host)]
 
@@ -435,7 +445,8 @@ def add_destination_data(context, get_db_credentials, get_table_mapping, get_fie
     table_name = table_mapping['destination_table'].iloc[0]
     is_incremental = table_mapping['is_incremental'].iloc[0]
     temp_schema = os.getenv('TEMP_SCHEMA') or "tmp"
-    schema = "dbo"
+    # schema = "dbo"
+    schema = table_mapping['destination_schema'].iloc[0]
     temp_table_name = table_mapping['temp_table_name'].iloc[0]
     
     
@@ -514,7 +525,8 @@ def add_destination_attributes(context, get_db_credentials, get_table_mapping, g
     log.log_info(table_name)
 
     destination_host = table_mapping['destination_host'].iloc[0]
-    destination_host = destination_host.replace('windows', ':')
+    if 'file.core.windows.net' not in destination_host:
+        destination_host = destination_host.replace('windows', ':')
     destination_database = table_mapping['destination_database'].iloc[0]
     db_credentials = get_db_credentials[(get_db_credentials['database_name'] == destination_database) & (get_db_credentials['host'] == destination_host)]
 

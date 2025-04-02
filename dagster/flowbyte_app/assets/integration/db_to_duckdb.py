@@ -47,12 +47,14 @@ def get_table_mapping_duckdb(context):
     destination_key = partition_key["destination"]
 
     source_host = "/".join(source_key.split("/")[:-2])
-    source_host = source_host.replace('windows', ':')
+    if 'file.core.windows.net' not in source_host:
+        source_host = source_host.replace('windows', ':')
     source_db = source_key.split("/")[-2]
     table_name = source_key.split("/")[-1]
 
     destination_host = "/".join(destination_key.split("/")[:-2])
-    destination_host = destination_host.replace('windows', ':')
+    if 'file.core.windows.net' not in destination_host:
+        destination_host = destination_host.replace('windows', ':')
     destination_db = destination_key.split("/")[-2]
     destination_table_name = destination_key.split("/")[-1]
 
@@ -66,6 +68,7 @@ def get_table_mapping_duckdb(context):
                         tm.[destination_host],
                         tm.[destination_database],
                         tm.[destination_table],
+                        tm.[destination_schema],
                         tm.[destination_api_endpoint],
                         tm.[query],
                         tm.[is_attribute],
@@ -117,12 +120,14 @@ def get_field_mapping_duckdb(context):
     destination_key = partition_key["destination"]
 
     source_host = "/".join(source_key.split("/")[:-2])
-    source_host = source_host.replace('windows', ':')
+    if 'file.core.windows.net' not in source_host:
+        source_host = source_host.replace('windows', ':')
     source_db = source_key.split("/")[-2]
     table_name = source_key.split("/")[-1]
 
     destination_host = "/".join(destination_key.split("/")[:-2])
-    destination_host = destination_host.replace('windows', ':')
+    if 'file.core.windows.net' not in destination_host:
+        destination_host = destination_host.replace('windows', ':')
     destination_db = destination_key.split("/")[-2]
     destination_table_name = destination_key.split("/")[-1]
 
@@ -193,8 +198,10 @@ def get_source_data_duckdb(context, get_table_mapping_duckdb, get_field_mapping_
     source_database = table_mapping_no_attribute['source_database'].iloc[0]
     source_schema = table_mapping_no_attribute['source_schema'].iloc[0]
 
-    source_host = source_host.replace('windows', ':')
-    destination_host = destination_host.replace('windows', ':')
+    if 'file.core.windows.net' not in source_host:
+        source_host = source_host.replace('windows', ':')
+    if 'file.core.windows.net' not in destination_host:
+        destination_host = destination_host.replace('windows', ':')
     
     
     # get db credentials where database name is equal to the source database and host is equal to the source host
@@ -240,6 +247,8 @@ def get_source_data_duckdb(context, get_table_mapping_duckdb, get_field_mapping_
 
         else:
             query = sql.generate_query(table_mapping_no_attribute, mapping_data, schema=source_schema)
+            if config.where:
+                query += f"WHERE {config.where}"
 
             log.log_info(f"Non Incremental Query: {query}")
     
@@ -404,7 +413,8 @@ def add_destination_data_duckdb(context, get_table_mapping_duckdb, get_field_map
     destination_host = table_mapping['destination_host'].iloc[0]
     destination_database = table_mapping['destination_database'].iloc[0]
 
-    destination_host = destination_host.replace('windows', ':')
+    if 'file.core.windows.net' not in destination_host:
+        destination_host = destination_host.replace('windows', ':')
 
     df_credentials = sql.get_db_credentials()
     db_credentials = df_credentials[(df_credentials['database_name'] == destination_database) & (df_credentials['host'] == destination_host)]
@@ -414,7 +424,7 @@ def add_destination_data_duckdb(context, get_table_mapping_duckdb, get_field_map
     table_name = table_mapping['destination_table'].iloc[0]
     is_incremental = table_mapping['is_incremental'].iloc[0]
     temp_schema = os.getenv('TEMP_SCHEMA') or "tmp"
-    schema = "dbo"
+    schema = table_mapping['destination_schema'].iloc[0]
     temp_table_name = table_mapping['temp_table_name'].iloc[0]
 
     db = f"{destination_host}/{destination_database}.duckdb"
