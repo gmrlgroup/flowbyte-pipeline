@@ -44,7 +44,7 @@ def delete_governance_tables():
 
 
 
-@asset(owners=["peter.elhage@gmrlgroup.com", "team:data-eng"], compute_kind="sql", group_name="source", io_manager_key="parquet_io_manager", partitions=mssql_database_partitions)
+@asset(owners=["peter.elhage@gmrlgroup.com", "team:data-eng"], compute_kind="sql", group_name="source", io_manager_key="parquet_io_manager", partitions_def=mssql_database_partitions)
 def get_tables_details(context):
     
     host = context.partition_key.split("|")[0]
@@ -83,7 +83,7 @@ def get_tables_details(context):
 
 
 
-@asset(owners=["peter.elhage@gmrlgroup.com", "team:data-eng"], compute_kind="sql", group_name="source", io_manager_key="parquet_io_manager", partitions=mssql_database_partitions)
+@asset(owners=["peter.elhage@gmrlgroup.com", "team:data-eng"], compute_kind="sql", group_name="source", io_manager_key="parquet_io_manager", partitions_def=mssql_database_partitions)
 def get_coulumns_details(context):
 
     host = context.partition_key.split("|")[0]
@@ -128,7 +128,7 @@ def get_coulumns_details(context):
 
 
 
-@asset(owners=["peter.elhage@gmrlgroup.com", "team:data-eng"], compute_kind="sql", group_name="source", io_manager_key="parquet_io_manager", partitions=mssql_database_partitions)
+@asset(owners=["peter.elhage@gmrlgroup.com", "team:data-eng"], compute_kind="sql", group_name="source", io_manager_key="parquet_io_manager", partitions_def=mssql_database_partitions)
 def get_indexes_details(context):
     
     host = context.partition_key.split("|")[0]
@@ -183,7 +183,7 @@ def get_indexes_details(context):
 
 
 
-@asset(owners=["peter.elhage@gmrlgroup.com", "team:data-eng"], compute_kind="sql", group_name="source", io_manager_key="parquet_io_manager", partitions=mssql_database_partitions)
+@asset(owners=["peter.elhage@gmrlgroup.com", "team:data-eng"], compute_kind="sql", group_name="source", io_manager_key="parquet_io_manager", partitions_def=mssql_database_partitions)
 def get_table_storage_usage_details(context):
 
     host = context.partition_key.split("|")[0]
@@ -232,7 +232,7 @@ def get_table_storage_usage_details(context):
 
 
 
-@asset(owners=["peter.elhage@gmrlgroup.com", "team:data-eng"], compute_kind="sql", group_name="source", io_manager_key="parquet_io_manager", partitions=mssql_database_partitions)
+@asset(owners=["peter.elhage@gmrlgroup.com", "team:data-eng"], compute_kind="sql", group_name="source", io_manager_key="parquet_io_manager", partitions_def=mssql_database_partitions)
 def get_indexes_storage_usage_details(context):
 
     host = context.partition_key.split("|")[0]
@@ -306,7 +306,7 @@ def get_indexes_storage_usage_details(context):
 
 
 
-@asset(owners=["peter.elhage@gmrlgroup.com", "team:data-eng"], compute_kind="sql", group_name="load", io_manager_key="parquet_io_manager", partitions=mssql_database_partitions)
+@asset(owners=["peter.elhage@gmrlgroup.com", "team:data-eng"], compute_kind="sql", group_name="load", io_manager_key="parquet_io_manager", partitions_def=mssql_database_partitions)
 def load_governance_tables(context, get_tables_details, get_coulumns_details, get_indexes_details, get_table_storage_usage_details, get_indexes_storage_usage_details):
 
     df = get_tables_details
