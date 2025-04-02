@@ -209,6 +209,7 @@ class PandasParquetIOManager(UPathIOManager):
                     
 class QueryModel(Config):
     query: Optional[str] = None
+    where: Optional[str] = None
 
 
 
