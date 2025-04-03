@@ -48,34 +48,6 @@ def get_connection_details(prefix):
 
 
 
-
-
-
-def get_db_credentials():
-
-
-    server, database, username, password = get_connection_details("SETUP")
-
-    sql_setup = MSSQL(
-        host=server,
-        username=username,
-        password=password,
-        database=database,
-        driver="ODBC Driver 17 for SQL Server",
-        connection_type="sqlalchemy"
-
-        )
-    
-    query = f"""SELECT * FROM [data].[database_credentials]"""
-
-    sql_setup.connect()
-
-    df = sql_setup.get_data(query, chunksize=1000)
-
-    return df
-
-
-
 def get_db_credentials(host, database_name):
 
 
