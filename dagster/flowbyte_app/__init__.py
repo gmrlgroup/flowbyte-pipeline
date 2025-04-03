@@ -61,7 +61,7 @@ defs = Definitions(
             db_2_db_job,
             db_2_duckdb_job,
             adls_2_duckdb_job,
-            duckdb_2_duckdb_job,
+            duckdb_2_duckdb_job
         ],
     schedules = [ db_to_db_schedule ],
     sensors = sensors ,
