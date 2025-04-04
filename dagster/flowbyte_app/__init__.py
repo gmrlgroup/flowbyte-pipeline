@@ -11,7 +11,7 @@ from dagster import (
     
 )
 
-from flowbyte_app.assets import integration, governance
+from flowbyte_app.assets import integration
 from flowbyte_app.sensors import notification_sensors as ns
 from flowbyte_app.partitions import db_to_db_partitions
 from flowbyte_app.schedules import db_to_db_schedule
@@ -26,7 +26,6 @@ SEND_SUCCESS_NOTIFICATION = os.getenv("SEND_SUCCESS_NOTIFICATION", "false").lowe
 
 
 integration_assets = load_assets_from_modules([integration])
-governance_assets = load_assets_from_modules([governance])
 
 
 
@@ -44,14 +43,8 @@ duckdb_2_duckdb_job = define_asset_job(name="duckdb_2_duckdb", selection=["get_t
                                                                           "transform_data_duckdb_duckdb", 
                                                                           "add_destination_data_duckdb_duckdb"])
 
-duckdb_2_db_job = define_asset_job(name="duckdb_2_db", selection=["get_db_credentials_1",
-                                                                            "get_table_mapping_duckdb_db", 
-                                                                          "get_field_mapping_duckdb_db", 
-                                                                          "get_source_data_duckdb_db", 
-                                                                          "transform_data_duckdb_db", 
-                                                                          "add_destination_data_duckdb_db",
-                                                                        #   "add_destination_attributes_duckdb_db"
-                                                                          ])
+
+
 
 # List all active sensors
 sensors = [
@@ -63,13 +56,12 @@ if SEND_SUCCESS_NOTIFICATION:  # Add success sensor only if enabled
 
 
 defs = Definitions(
-    assets = [ *integration_assets ],
+    assets = [ *integration_assets],
     jobs=[  
             db_2_db_job,
             db_2_duckdb_job,
             adls_2_duckdb_job,
-            duckdb_2_duckdb_job,
-            duckdb_2_db_job
+            duckdb_2_duckdb_job
         ],
     schedules = [ db_to_db_schedule ],
     sensors = sensors ,
