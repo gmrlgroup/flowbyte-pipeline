@@ -3,7 +3,7 @@ import pandas as pd
 from dagster import MetadataValue, Output, asset, op, StaticPartitionsDefinition, MultiPartitionKey
 from flowbyte.sql import MSSQL
 import os
-from flowbyte_app.partitions import mssql_database_partitions
+from governance.partitions import mssql_database_partitions
 
 import sys
 sys.path.append('..')
@@ -13,31 +13,76 @@ from modules import sql, log, models
 
 
 
-server, database, username, password = sql.get_connection_details("FB")
-sql_fb = MSSQL(
+server, db, username, password = sql.get_connection_details("SETUP")
+sql_SETUP = MSSQL(
     host=server,
     username=username,
     password=password,
-    database=database,
+    database=db,
     driver="ODBC Driver 17 for SQL Server",
-    connection_type="pyodbc"
+    connection_type="sqlalchemy"
 
     )
 
 
 
-@asset(owners=["peter.elhage@gmrlgroup.com", "team:data-eng"], compute_kind="sql", group_name="delete", io_manager_key="parquet_io_manager")
-def delete_governance_tables():
+# @asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="sql", group_name="config", io_manager_key="parquet_io_manager", partitions_def=mssql_database_partitions)
+# def get_db_credentials_2():
+    
+#     query = f"""SELECT * FROM [dbo].[database_credential]
+#     where host='13.95.30.119' and database_name='flowbyte'"""
 
-    db_credentials = sql.get_db_credentials(host='13.95.30.119', database='flowbyte')
+#     sql_SETUP.connect()
 
-    sql_fb = sql.init_sql(db_credentials)
-    sql_fb.connect()
+#     df = sql_SETUP.get_data(query, chunksize=1000)
 
-    sql_fb.connect()
-    sql_fb.delete_data(schema_name="data", table_name="column")
-    sql_fb.delete_data(schema_name="data", table_name="index")
-    sql_fb.delete_data(schema_name="data", table_name="table")
+#     metadata = {
+#         "row_sql": MetadataValue.md("```SQL\n" + query + "\n```")
+#     }
+
+#     return Output(value=df, metadata=metadata)
+
+
+
+
+@asset(owners=["peter.elhage@gmrlgroup.com", "team:data-eng"], compute_kind="sql", group_name="delete", io_manager_key="parquet_io_manager", partitions_def=mssql_database_partitions)
+def delete_governance_tables(context):
+
+    host = context.partition_key.split("|")[0]
+    database = context.partition_key.split("|")[1]
+
+
+    db_credentials = sql.get_db_credentials(host='13.95.30.119', database_name='flowbyte')
+    conditions = f"host = '{host}' AND database_name = '{database}'"
+
+    sql_SETUP = sql.init_sql(db_credentials)
+    sql_SETUP.connect()
+
+    sql_SETUP.connect()
+    sql_SETUP.delete_data_with_conditions(schema_name="data", table_name="column",conditions= conditions)
+    sql_SETUP.delete_data_with_conditions(schema_name="data", table_name="index", conditions= conditions)
+    sql_SETUP.delete_data_with_conditions(schema_name="data", table_name="table", conditions= conditions)
+
+
+
+
+    # #db_credentials = sql.get_db_credentials(host='13.95.30.119', database_name='flowbyte')
+    # db_credentials = get_db_credentials_2
+
+    # log.log_info(db_credentials)
+
+    # conditions = f"host = '{host}' AND database_name = '{database}'"
+    # log.log_info(conditions)
+
+    # sql_credentials = sql.init_sql(db_credentials)
+    # sql_credentials.connect()
+    # log.log_info(sql_credentials)
+
+
+
+    # sql_credentials.delete_data(schema_name="data", table_name="column")
+    # sql_credentials.delete_data_with_conditions(schema_name="data", table_name="index", conditions= conditions)
+    # sql_credentials.delete_data_with_conditions(schema_name="data", table_name="table", conditions= conditions)
 
 
 
@@ -45,33 +90,36 @@ def delete_governance_tables():
 
 
 @asset(owners=["peter.elhage@gmrlgroup.com", "team:data-eng"], compute_kind="sql", group_name="source", io_manager_key="parquet_io_manager", partitions_def=mssql_database_partitions)
-def get_tables_details(context):
+def get_tables_details(context,delete_governance_tables):
     
     host = context.partition_key.split("|")[0]
     database = context.partition_key.split("|")[1]
 
     query = f"""
 
-          SELECT 
-            @@SERVERNAME AS [host],
+            SELECT 
+            '{host}' AS [host],
             DB_NAME() AS [database_name],
             s.name AS [schema],
-            t.name AS [name]
-        FROM sys.tables t
-        JOIN sys.schemas s 
-            ON t.schema_id = s.schema_id
-        JOIN sys.partitions p 
-            ON t.object_id = p.object_id
+            t.name AS [name],
+            SUM(p.rows) AS [row_count]
+            FROM sys.tables t
+            JOIN sys.schemas s 
+                ON t.schema_id = s.schema_id
+            JOIN sys.partitions p 
+                ON t.object_id = p.object_id 
+                AND p.index_id IN (0,1)
+            GROUP BY s.name, t.name
         """
 
 
 
-    db_credentials = sql.get_db_credentials(host=host, database=database)
+    db_credentials = sql.get_db_credentials(host=host, database_name=database)
 
-    sql_fb = sql.init_sql(db_credentials)
-    sql_fb.connect()
+    sql_SETUP = sql.init_sql(db_credentials)
+    sql_SETUP.connect()
 
-    df = sql_fb.get_data(query, chunksize=1000)
+    df = sql_SETUP.get_data(query, chunksize=1000)
 
     metadata = {
         "row_sql": MetadataValue.md("```SQL\n" + query + "\n```")
@@ -84,7 +132,7 @@ def get_tables_details(context):
 
 
 @asset(owners=["peter.elhage@gmrlgroup.com", "team:data-eng"], compute_kind="sql", group_name="source", io_manager_key="parquet_io_manager", partitions_def=mssql_database_partitions)
-def get_coulumns_details(context):
+def get_coulumns_details(context,delete_governance_tables):
 
     host = context.partition_key.split("|")[0]
     database = context.partition_key.split("|")[1]
@@ -92,7 +140,7 @@ def get_coulumns_details(context):
     query = f"""
 
         SELECT
-            @@SERVERNAME AS [host],
+            '{host}' AS [host],
             DB_NAME() AS [database_name],
             s.name AS [schema],
             t.name AS [table_name],
@@ -111,12 +159,12 @@ def get_coulumns_details(context):
         
         """
 
-    db_credentials = sql.get_db_credentials(host=host, database=database)
+    db_credentials = sql.get_db_credentials(host=host, database_name=database)
 
-    sql_fb = sql.init_sql(db_credentials)
-    sql_fb.connect()
+    sql_SETUP = sql.init_sql(db_credentials)
+    sql_SETUP.connect()
 
-    df = sql_fb.get_data(query, chunksize=1000)
+    df = sql_SETUP.get_data(query, chunksize=1000)
 
     metadata = {
         "row_sql": MetadataValue.md("```SQL\n" + query + "\n```")
@@ -129,7 +177,7 @@ def get_coulumns_details(context):
 
 
 @asset(owners=["peter.elhage@gmrlgroup.com", "team:data-eng"], compute_kind="sql", group_name="source", io_manager_key="parquet_io_manager", partitions_def=mssql_database_partitions)
-def get_indexes_details(context):
+def get_indexes_details(context,delete_governance_tables):
     
     host = context.partition_key.split("|")[0]
     database = context.partition_key.split("|")[1]
@@ -137,7 +185,7 @@ def get_indexes_details(context):
     query = f"""
 
             SELECT
-            @@SERVERNAME AS [host],
+            '{host}' AS [host],
             DB_NAME() AS [database_name],
             s.name AS [schema],
             t.name AS [table_name],
@@ -164,12 +212,13 @@ def get_indexes_details(context):
         
         """
 
-    db_credentials = sql.get_db_credentials(host=host, database=database)
+    db_credentials = sql.get_db_credentials(host=host, database_name=database)
 
-    sql_fb = sql.init_sql(db_credentials)
-    sql_fb.connect()
+    sql_SETUP = sql.init_sql(db_credentials)
+    sql_SETUP.connect()
 
-    df = sql_fb.get_data(query, chunksize=1000)
+    df = sql_SETUP.get_data(query, chunksize=1000)
+    
 
     metadata = {
         "row_sql": MetadataValue.md("```SQL\n" + query + "\n```")
@@ -184,7 +233,7 @@ def get_indexes_details(context):
 
 
 @asset(owners=["peter.elhage@gmrlgroup.com", "team:data-eng"], compute_kind="sql", group_name="source", io_manager_key="parquet_io_manager", partitions_def=mssql_database_partitions)
-def get_table_storage_usage_details(context):
+def get_table_storage_usage_details(context,delete_governance_tables):
 
     host = context.partition_key.split("|")[0]
     database = context.partition_key.split("|")[1]
@@ -192,8 +241,8 @@ def get_table_storage_usage_details(context):
     query = f"""
 
             SELECT
-                o.create_date AS [creation_date],
-                @@SERVERNAME AS [host],
+                GETDATE() AS [date],
+                '{host}' AS [host],
                 DB_NAME() AS [database_name],
                 s.name AS [schema],
                 t.name AS [table_name],
@@ -214,12 +263,16 @@ def get_table_storage_usage_details(context):
             ORDER BY t.name
         """
 
-    db_credentials = sql.get_db_credentials(host=host, database=database)
+    db_credentials = sql.get_db_credentials(host=host, database_name=database)
 
-    sql_fb = sql.init_sql(db_credentials)
-    sql_fb.connect()
+    sql_SETUP = sql.init_sql(db_credentials)
+    sql_SETUP.connect()
 
-    df = sql_fb.get_data(query, chunksize=1000)
+    df = sql_SETUP.get_data(query, chunksize=1000)
+    # make [used_space_mb] and [allocated_space_mb] as FLOAT
+    df['used_space_mb'] = df['used_space_mb'].astype(float)
+    df['allocated_space_mb'] = df['allocated_space_mb'].astype(float)
+
 
     metadata = {
         "row_sql": MetadataValue.md("```SQL\n" + query + "\n```")
@@ -233,19 +286,20 @@ def get_table_storage_usage_details(context):
 
 
 @asset(owners=["peter.elhage@gmrlgroup.com", "team:data-eng"], compute_kind="sql", group_name="source", io_manager_key="parquet_io_manager", partitions_def=mssql_database_partitions)
-def get_indexes_storage_usage_details(context):
+def get_indexes_storage_usage_details(context,delete_governance_tables):
 
     host = context.partition_key.split("|")[0]
     database = context.partition_key.split("|")[1]
     
     query = f"""
-                    SELECT
+
+                      SELECT
                         GETDATE() AS [date],
-                        @@SERVERNAME AS [host],
+                        '{host}'AS [host],
                         DB_NAME() AS [database],
                         s.name AS [schema],
                         t.name AS [table],
-                        i.name AS [index_name],
+                        i.name AS [name],
                         STUFF
                         (
                             (
@@ -263,9 +317,8 @@ def get_indexes_storage_usage_details(context):
                             1,
                             2,
                             ''
-                        ) AS [index_columns],
+                        ) AS [columns],
                         i.type_desc AS [type],
-                        p.rows AS [row_count],
                         (SUM(a.used_pages) * 8.0) / 1024.0 AS [used_space_mb],
                         (SUM(a.total_pages) * 8.0) / 1024.0 AS [allocated_space_mb]
                     FROM sys.tables t
@@ -290,12 +343,15 @@ def get_indexes_storage_usage_details(context):
 
         """
     
-    db_credentials = sql.get_db_credentials(host=host, database=database)
+    db_credentials = sql.get_db_credentials(host=host, database_name=database)
 
-    sql_fb = sql.init_sql(db_credentials)
-    sql_fb.connect()
+    sql_SETUP = sql.init_sql(db_credentials)
+    sql_SETUP.connect()
 
-    df = sql_fb.get_data(query, chunksize=1000)
+    df = sql_SETUP.get_data(query, chunksize=1000)
+    # make [used_space_mb] and [allocated_space_mb] as FLOAT
+    df['used_space_mb'] = df['used_space_mb'].astype(float)
+    df['allocated_space_mb'] = df['allocated_space_mb'].astype(float)
 
     metadata = {
         "row_sql": MetadataValue.md("```SQL\n" + query + "\n```")
@@ -306,8 +362,9 @@ def get_indexes_storage_usage_details(context):
 
 
 
+
 @asset(owners=["peter.elhage@gmrlgroup.com", "team:data-eng"], compute_kind="sql", group_name="load", io_manager_key="parquet_io_manager", partitions_def=mssql_database_partitions)
-def load_governance_tables(context, get_tables_details, get_coulumns_details, get_indexes_details, get_table_storage_usage_details, get_indexes_storage_usage_details):
+def load_governance_tables(context, get_tables_details, get_coulumns_details, get_indexes_details,  get_table_storage_usage_details, get_indexes_storage_usage_details):
 
     df = get_tables_details
     df_1 = get_coulumns_details
@@ -315,24 +372,29 @@ def load_governance_tables(context, get_tables_details, get_coulumns_details, ge
     df_3 = get_table_storage_usage_details
     df_4 = get_indexes_storage_usage_details
 
+    # replace all None values with ' ' in df_2 in column named name
+    df_2['name'] = df_2['name'].replace({None: ' '})
+    df_4['name'] = df_4['name'].replace({None: ' '})
+
+
 
     host = context.partition_key.split("|")[0]
     database = context.partition_key.split("|")[1]
 
-    db_credentials = sql.get_db_credentials(host=host, database=database)
+    # db_credentials = sql.get_db_credentials(host=host, database_name=database)
+    db_credentials = sql.get_db_credentials(host='13.95.30.119', database_name='flowbyte')
+    sql_SETUP = sql.init_sql(db_credentials)
+    sql_SETUP.connect()
 
-    sql_fb = sql.init_sql(db_credentials)
-    sql_fb.connect()
+    sql_SETUP.insert_data(schema="data", table_name="table", insert_records=df, chunksize=10000)
 
-    sql_fb.insert_data(schema_name="data", table_name="table", df=df, chunksize=10000)
+    sql_SETUP.insert_data(schema="data", table_name="column", insert_records=df_1, chunksize=10000)
 
-    sql_fb.insert_data(schema_name="data", table_name="column", df=df_1, chunksize=10000)
+    sql_SETUP.insert_data(schema="data", table_name="index", insert_records=df_2, chunksize=10000)
 
-    sql_fb.insert_data(schema_name="data", table_name="index", df=df_2, chunksize=10000)
+    sql_SETUP.insert_data(schema="data", table_name="table_storage_usage", insert_records=df_3, chunksize=10000)
 
-    sql_fb.insert_data(schema_name="data", table_name="table_storage_usage", df=df_3, chunksize=10000)
-
-    sql_fb.insert_data(schema_name="data", table_name="index_storage_usage", df=df_4, chunksize=10000)
+    sql_SETUP.insert_data(schema="data", table_name="index_storage_usage", insert_records=df_4, chunksize=10000)
 
 
     return Output(value=None)

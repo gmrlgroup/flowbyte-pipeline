@@ -48,7 +48,6 @@ def get_connection_details(prefix):
 
 
 
-
 def get_db_credentials(host, database_name):
 
 
