@@ -5,6 +5,7 @@ import os
 import sys
 sys.path.append('..')
 from modules import sql, log
+import platform
 
 
 env = os.getenv('ENV')
@@ -108,11 +109,33 @@ def get_tables(source_type, destination_type):
     if df.empty:
         return ([], [], [])
 
-    df['source_database_id'] = df['source_host'].str.replace(':', 'windows') + "/" + df['source_database'].astype(str) + "/" + df['source_table'].astype(str)
-    df['destination_database_id'] = df['destination_host'].str.replace(':', 'windows') + "/" + df['destination_database'].astype(str) + "/" + df['destination_table'].astype(str)
-    # df['source_database_id'] = df['source_host'].astype(str) + "/" + df['source_database'].astype(str) + "/" + df['source_table'].astype(str)
-    # df['destination_database_id'] = df['destination_host'].astype(str) + "/" + df['destination_database'].astype(str) + "/" + df['destination_table'].astype(str)
+    # df['source_database_id'] = df['source_host'].str.replace(':', 'windows') + "/" + df['source_database'].astype(str) + "/" + df['source_table'].astype(str)
+    # df['destination_database_id'] = df['destination_host'].str.replace(':', 'windows') + "/" + df['destination_database'].astype(str) + "/" + df['destination_table'].astype(str)
+    
+    if platform.system() == "Windows":
+        df['source_host'] = df['source_host'].str.replace(':', 'windows')
+        df['source_host'] = df['source_host'].str.replace('\\\\', 'network\\backslash')
+        df['destination_host'] = df['destination_host'].str.replace(':', 'windows')
+        df['destination_host'] = df['destination_host'].str.replace('\\\\', 'network\\backslash')
+
+
+    df['source_database_id'] = df.apply(lambda row: os.path.join(row['source_host'], str(row['source_database']), str(row['source_table'])), axis=1)
+    df['destination_database_id'] = df.apply(lambda row: os.path.join(row['destination_host'], str(row['destination_database']), str(row['destination_table'])), axis=1)
+
     df['partition_key'] = df['destination_database_id'].astype(str) + "|" + df['source_database_id'].astype(str)
+
+
+
+
+
+    
+
+
+
+
+
+
+
 
     source_databases = df['source_database_id'].unique().tolist() if df['source_database_id'].notnull().any() else []
     destination_databases = df['destination_database_id'].unique().tolist() if df['destination_database_id'].notnull().any() else []
