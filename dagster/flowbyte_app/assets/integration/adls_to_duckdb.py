@@ -7,7 +7,7 @@ import os
 import duckdb
 from flowbyte_app.partitions import adls_to_duckdb_partitions
 import pyarrow.parquet as pq
-
+import platform
 
 import sys
 sys.path.append('..')
@@ -47,18 +47,30 @@ def get_table_mapping_adls(context):
     source_key = partition_key["source"]
     destination_key = partition_key["destination"]
 
-    source_host = "/".join(source_key.split("/")[:-2])
-    source_db = source_key.split("/")[-2]
-    table_name = source_key.split("/")[-1]
 
-    destination_host = "/".join(destination_key.split("/")[:-2])
-    destination_db = destination_key.split("/")[-2]
-    destination_table_name = destination_key.split("/")[-1]
+    if platform.system() == "Windows":
+        source_host = "\\".join(source_key.split("\\")[:-2])
+        source_db = source_key.split("\\")[-2]
+        table_name = source_key.split("\\")[-1]
 
-    if 'file.core.windows.net' not in source_host:
-        source_host = source_host.replace('windows', ':')
-    if 'file.core.windows.net' not in destination_host:
-        destination_host = destination_host.replace('windows', ':')
+        destination_host = "\\".join(destination_key.split("\\")[:-2])
+        destination_db = destination_key.split("\\")[-2]
+        destination_table_name = destination_key.split("\\")[-1]
+
+        if 'file.core.windows.net' not in source_host:
+            source_host = source_host.replace('windows', ':')
+        source_host = source_host.replace('network\\backslash', '\\\\')
+        if 'file.core.windows.net' not in destination_host:
+            destination_host = destination_host.replace('windows', ':')
+        destination_host = destination_host.replace('network\\backslash', '\\\\')
+    else:
+        source_host = "/".join(source_key.split("/")[:-2])
+        source_db = source_key.split("/")[-2]
+        table_name = source_key.split("/")[-1]
+
+        destination_host = "/".join(destination_key.split("/")[:-2])
+        destination_db = destination_key.split("/")[-2]
+        destination_table_name = destination_key.split("/")[-1]
 
     # source_host = context.partition_key.split("/")[0]
     # source_db = context.partition_key.split("/")[1]
@@ -127,18 +139,29 @@ def get_field_mapping_adls(context):
     source_key = partition_key["source"]
     destination_key = partition_key["destination"]
 
-    source_host = "/".join(source_key.split("/")[:-2])
-    source_db = source_key.split("/")[-2]
-    table_name = source_key.split("/")[-1]
+    if platform.system() == "Windows":
+        source_host = "\\".join(source_key.split("\\")[:-2])
+        source_db = source_key.split("\\")[-2]
+        table_name = source_key.split("\\")[-1]
 
-    destination_host = "/".join(destination_key.split("/")[:-2])
-    destination_db = destination_key.split("/")[-2]
-    destination_table_name = destination_key.split("/")[-1]
+        destination_host = "\\".join(destination_key.split("\\")[:-2])
+        destination_db = destination_key.split("\\")[-2]
+        destination_table_name = destination_key.split("\\")[-1]
 
-    if 'file.core.windows.net' not in source_host:
-        source_host = source_host.replace('windows', ':')
-    if 'file.core.windows.net' not in destination_host:
-        destination_host = destination_host.replace('windows', ':')
+        if 'file.core.windows.net' not in source_host:
+            source_host = source_host.replace('windows', ':')
+        source_host = source_host.replace('network\\backslash', '\\\\')
+        if 'file.core.windows.net' not in destination_host:
+            destination_host = destination_host.replace('windows', ':')
+        destination_host = destination_host.replace('network\\backslash', '\\\\')
+    else:
+        source_host = "/".join(source_key.split("/")[:-2])
+        source_db = source_key.split("/")[-2]
+        table_name = source_key.split("/")[-1]
+
+        destination_host = "/".join(destination_key.split("/")[:-2])
+        destination_db = destination_key.split("/")[-2]
+        destination_table_name = destination_key.split("/")[-1]
 
 
     sql_setup.connect()
@@ -204,16 +227,19 @@ def get_source_data_adls(context, get_table_mapping_adls, get_field_mapping_adls
     source_host = table_mapping_no_attribute['source_host'].iloc[0]
     source_database = table_mapping_no_attribute['source_database'].iloc[0]
 
-    if 'file.core.windows.net' not in source_host:
-        source_host = source_host.replace('windows', ':')
-    if 'file.core.windows.net' not in destination_host:
-        destination_host = destination_host.replace('windows', ':')
+    if platform.system() == "Windows":
+        if 'file.core.windows.net' not in source_host:
+            source_host = source_host.replace('windows', ':')
+        source_host = source_host.replace('network\\backslash', '\\\\')
+        if 'file.core.windows.net' not in destination_host:
+            destination_host = destination_host.replace('windows', ':')
+        destination_host = destination_host.replace('network\\backslash', '\\\\')
     
     # get db credentials where database name is equal to the source database and host is equal to the source host
-    df_credentials = sql.get_db_credentials()
-    log.log_info(f"DB Credentials: {df_credentials}")
-    db_credentials_source = df_credentials[(df_credentials['database_name'] == source_database) & (df_credentials['host'] == source_host)]
-    db_credentials_dest = df_credentials[(df_credentials['database_name'] == destination_database) & (df_credentials['host'] == destination_host)]
+    db_credentials_source = sql.get_db_credentials(host=source_host, database_name=source_database)
+    # log.log_info(f"DB Credentials: {df_credentials}")
+    # db_credentials_source = df_credentials[(df_credentials['database_name'] == source_database) & (df_credentials['host'] == source_host)]
+    # db_credentials_dest = df_credentials[(df_credentials['database_name'] == destination_database) & (df_credentials['host'] == destination_host)]
     
 
     log.log_info(db_credentials_source)
@@ -226,25 +252,7 @@ def get_source_data_adls(context, get_table_mapping_adls, get_field_mapping_adls
 
     table_name = f"{table_mapping['source_table'].iloc[0]}.parquet" #ex: sales.parquet
 
-    # sql_source = sql.init_sql(db_credentials_source)
-    # sql_source.connect()
-
-
-    # sql_destination = sql.init_sql(db_credentials_dest)
-    # sql_destination.connect()
-
-    # check if table is_attribute is True
-    # is_incremental = table_mapping['is_incremental'].iloc[0]
-    # incremental_col = table_mapping['incremental_column'].iloc[0]
-
-    # field_mapping = get_field_mapping_adls
-
-    # # convert field_mapping to dictionary
-    # mapping_data = field_mapping.to_dict(orient='records')
-
-    # if env == "DEV":
-    #     log.log_debug(f"Mapping Data: {mapping_data}")
-
+    
 
     # check if the query in QueryModel is not empty
     if config.query:
@@ -305,50 +313,7 @@ def get_source_data_adls(context, get_table_mapping_adls, get_field_mapping_adls
 
         
         final_df = pd.concat(dfs, ignore_index=True)
-    #     if is_incremental:
-    #         incremental_col = table_mapping['incremental_column'].iloc[0]
-    #         max_incremental_value = sql.get_max_incremental_value(sql=sql_destination, table_mapping=table_mapping_no_attribute, incremental_col=incremental_col)
-    #         query = sql.generate_query(table_mapping_no_attribute, mapping_data, incremental_col, max_incremental_value)
 
-    #     else:
-    #         query = sql.generate_query(table_mapping_no_attribute, mapping_data)
-
-    #         log.log_info(f"Non Incremental Query: {query}")
-    
-    
-    # if env == "DEV":
-    #     log.log_debug(f"Query: {query}")
-
-
-    # object_columns = []
-    # float_columns = []
-    # integer_columns = []
-    # # obcjec columns start with NVARCHAR
-    # object_columns = field_mapping[field_mapping['source_data_type'].str.startswith('NVARCHAR')]
-    # object_columns = object_columns['source_column'].tolist()
-
-    # # int columns contains INT
-    # integer_columns = field_mapping[field_mapping['source_data_type'].str.contains('INT')]
-    # integer_columns = integer_columns['source_column'].tolist()
-
-    # # float columns contains DECIMAL
-    # float_columns = field_mapping[field_mapping['source_data_type'].str.startswith('DECIMAL')]
-    # float_columns = float_columns['source_column'].tolist()
-
-
-    # if env == "DEV":
-    #     log.log_debug(f"Object Columns: {object_columns}")
-    #     log.log_debug(f"Integer Columns: {integer_columns}")
-    #     log.log_debug(f"Float Columns: {float_columns}")
-
-    #     log.log_debug(f"HOST: {sql_source.host}")
-    #     log.log_debug(f"DATABASE: {sql_source.database}")
-
-    # df = sql_source.get_data(query, chunksize=100000, object_columns=object_columns, float_columns=float_columns, integer_columns=integer_columns, progress_callback=sql.print_progress, message="Extracted ")
-
-    # metadata = {
-    #     "row_sql": MetadataValue.md("```SQL\n" + query + "\n```")
-    # }
 
     return Output(value=final_df)#), metadata=metadata)
 
@@ -465,12 +430,14 @@ def add_destination_data_adls(context, get_table_mapping_adls, get_field_mapping
     # field_mapping = get_field_mapping_adls
 
     destination_host = table_mapping['destination_host'].iloc[0]
-    if 'file.core.windows.net' not in destination_host:
-        destination_host = destination_host.replace('windows', ':')
+    if platform.system() == "Windows":
+        if 'file.core.windows.net' not in destination_host:
+            destination_host = destination_host.replace('windows', ':')
+        destination_host = destination_host.replace('network\\backslash', '\\\\')
     destination_database = table_mapping['destination_database'].iloc[0]
 
-    df_credentials = sql.get_db_credentials()
-    db_credentials = df_credentials[(df_credentials['database_name'] == destination_database) & (df_credentials['host'] == destination_host)]
+    db_credentials = sql.get_db_credentials(host=destination_host, database_name=destination_database)
+    # db_credentials = df_credentials[(df_credentials['database_name'] == destination_database) & (df_credentials['host'] == destination_host)]
 
     log.log_info(db_credentials)
 

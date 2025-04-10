@@ -5,6 +5,7 @@ from flowbyte.sql import MSSQL
 import os
 import duckdb
 from flowbyte_app.partitions import duckdb_to_db_partitions
+import platform
 
 
 import sys
@@ -29,24 +30,6 @@ sql_setup = MSSQL(
 
 
 
-# table_partitions = StaticPartitionsDefinition(get_tables('mssql', 'duckdb'))
-
-@asset(owners=["kevork.keheian@flowbyte.dev", "team:data-eng"], compute_kind="sql", group_name="config", io_manager_key="parquet_io_manager", partitions_def=duckdb_to_db_partitions)
-def get_db_credentials_1():
-    
-    query = f"""SELECT * FROM [dbo].[database_credential]"""
-
-    sql_setup.connect()
-
-    df = sql_setup.get_data(query, chunksize=1000)
-
-    metadata = {
-        "row_sql": MetadataValue.md("```SQL\n" + query + "\n```")
-    }
-
-    return Output(value=df, metadata=metadata)
-
-
 @asset(owners=["romy.bouabdo@gmrlgroup.com", "team:data-sci"], compute_kind="sql", group_name="config", io_manager_key="parquet_io_manager", partitions_def=duckdb_to_db_partitions)
 def get_table_mapping_duckdb_db(context):
     """
@@ -59,23 +42,37 @@ def get_table_mapping_duckdb_db(context):
     source_key = partition_key["source"]
     destination_key = partition_key["destination"]
 
-    # c:/duckdb/storage/sales_dataset/sales_line
-    source_host = "/".join(source_key.split("/")[:-2])
+    if platform.system() == "Windows":
+        # c:/duckdb/storage/sales_dataset/sales_line
+        source_host = "\\".join(source_key.split("\\")[:-2])
 
-    if 'file.core.windows.net' not in source_host:
-        source_host = source_host.replace('windows', ':')
+        if 'file.core.windows.net' not in source_host:
+            source_host = source_host.replace('windows', ':')
+        source_host = source_host.replace('network\\backslash', '\\\\')
 
-    source_db = source_key.split("/")[-2]
-    table_name = source_key.split("/")[-1]
+        source_db = source_key.split("\\")[-2]
+        table_name = source_key.split("\\")[-1]
 
 
-    destination_host = "/".join(destination_key.split("/")[:-2])
+        destination_host = "\\".join(destination_key.split("\\")[:-2])
 
-    if 'file.core.windows.net' not in destination_host:
-        destination_host = destination_host.replace('windows', ':')
+        if 'file.core.windows.net' not in destination_host:
+            destination_host = destination_host.replace('windows', ':')
+        destination_host = destination_host.replace('network\\backslash', '\\\\')
 
-    destination_db = destination_key.split("/")[-2]
-    destination_table_name = destination_key.split("/")[-1]
+        destination_db = destination_key.split("\\")[-2]
+        destination_table_name = destination_key.split("\\")[-1]
+    
+    else:
+        source_host = "/".join(source_key.split("/")[:-2])
+
+        source_db = source_key.split("/")[-2]
+        table_name = source_key.split("/")[-1]
+
+        destination_host = "/".join(destination_key.split("/")[:-2])
+
+        destination_db = destination_key.split("/")[-2]
+        destination_table_name = destination_key.split("/")[-1]
 
 
     sql_setup.connect()
@@ -140,22 +137,36 @@ def get_field_mapping_duckdb_db(context):
     destination_key = partition_key["destination"]
 
 
-    source_host = "/".join(source_key.split("/")[:-2])
+    if platform.system() == "Windows":
+        source_host = "\\".join(source_key.split("\\")[:-2])
 
-    if 'file.core.windows.net' not in source_host:
-        source_host = source_host.replace('windows', ':')
+        if 'file.core.windows.net' not in source_host:
+            source_host = source_host.replace('windows', ':')
+        source_host = source_host.replace('network\\backslash', '\\\\')
 
-    source_db = source_key.split("/")[-2]
-    table_name = source_key.split("/")[-1]
+        source_db = source_key.split("\\")[-2]
+        table_name = source_key.split("\\")[-1]
 
+        destination_host = "\\".join(destination_key.split("\\")[:-2])
 
-    destination_host = "/".join(destination_key.split("/")[:-2])
+        if 'file.core.windows.net' not in destination_host:
+            destination_host = destination_host.replace('windows', ':')
+        destination_host = destination_host.replace('network\\backslash', '\\\\')
 
-    if 'file.core.windows.net' not in destination_host:
-        destination_host = destination_host.replace('windows', ':')
+        destination_db = destination_key.split("\\")[-2]
+        destination_table_name = destination_key.split("\\")[-1]
+    
+    else:
+        source_host = "/".join(source_key.split("/")[:-2])
 
-    destination_db = destination_key.split("/")[-2]
-    destination_table_name = destination_key.split("/")[-1]
+        source_db = source_key.split("/")[-2]
+        table_name = source_key.split("/")[-1]
+
+        destination_host = "/".join(destination_key.split("/")[:-2])
+
+        destination_db = destination_key.split("/")[-2]
+        destination_table_name = destination_key.split("/")[-1]
+
 
 
     sql_setup.connect()
@@ -209,7 +220,7 @@ def get_field_mapping_duckdb_db(context):
 
 
 @asset(owners=["romy.bouabdo@gmrlgroup.com", "team:data-sci"], compute_kind="sql", group_name="extract", io_manager_key="parquet_io_manager", partitions_def=duckdb_to_db_partitions)
-def get_source_data_duckdb_db(context, get_db_credentials_1, get_table_mapping_duckdb_db, get_field_mapping_duckdb_db, config: models.QueryModel):
+def get_source_data_duckdb_db(context, get_table_mapping_duckdb_db, get_field_mapping_duckdb_db, config: models.QueryModel):
     """
     Get Data from Source
     """
@@ -232,18 +243,24 @@ def get_source_data_duckdb_db(context, get_db_credentials_1, get_table_mapping_d
     
     # get db credentials where database name is equal to the source database and host is equal to the source host
     # df_credentials = sql.get_db_credentials()
-    df_credentials = get_db_credentials_1
-    log.log_info(f"DB Credentials: {df_credentials}")
-    log.log_info(f"DATABASE NAME: {destination_database}, HOST: {destination_host}")
+    # df_credentials = get_db_credentials_1
+    # log.log_info(f"DB Credentials: {df_credentials}")
+    log.log_debug(f"DATABASE NAME: {destination_database}, HOST: {destination_host}")
     # db_credentials_source = df_credentials[(df_credentials['database_name'] == source_database) & (df_credentials['host'] == source_host)]
-    db_credentials_dest = df_credentials[(df_credentials['database_name'] == destination_database) & (df_credentials['host'] == destination_host)]
+    db_credentials_dest = sql.get_db_credentials(host=destination_host, database_name=destination_database)
+    # db_credentials_dest = df_credentials[(df_credentials['database_name'] == destination_database) & (df_credentials['host'] == destination_host)]
     log.log_info(f"DB Credentials Destination: {db_credentials_dest}")
 
-    # replace cwindows to C:
-    if 'file.core.windows.net' not in source_host:
-        source_host = source_host.replace('windows', ':')
-    if 'file.core.windows.net' not in destination_host:
-        destination_host = destination_host.replace('windows', ':')
+
+    if platform.system() == "Windows":
+        # replace cwindows to C:
+        if 'file.core.windows.net' not in source_host:
+            source_host = source_host.replace('windows', ':')
+        source_host = source_host.replace('network\\backslash', '\\\\')
+        if 'file.core.windows.net' not in destination_host:
+            destination_host = destination_host.replace('windows', ':')
+        destination_host = destination_host.replace('network\\backslash', '\\\\')
+        
 
     if 'file.core.windows.net' in source_host:
         source_db = f"{source_host}\{source_database}.duckdb"
@@ -446,7 +463,7 @@ def transform_data_duckdb_db(context, get_table_mapping_duckdb_db, get_field_map
 
 
 @asset(owners=["romy.bouabdo@gmrlgroup.com", "team:data-sci"], compute_kind="api", group_name="load", io_manager_key="parquet_io_manager", partitions_def=duckdb_to_db_partitions)
-def add_destination_data_duckdb_db(context, get_db_credentials_1, get_table_mapping_duckdb_db, get_field_mapping_duckdb_db, transform_data_duckdb_db):
+def add_destination_data_duckdb_db(context, get_table_mapping_duckdb_db, get_field_mapping_duckdb_db, transform_data_duckdb_db):
     """
     Add Data to Destination
     """
@@ -469,8 +486,8 @@ def add_destination_data_duckdb_db(context, get_db_credentials_1, get_table_mapp
     destination_database = table_mapping['destination_database'].iloc[0]
 
     # df_credentials = sql.get_db_credentials()
-    df_credentials = get_db_credentials_1
-    db_credentials = df_credentials[(df_credentials['database_name'] == destination_database) & (df_credentials['host'] == destination_host)]
+    db_credentials = sql.get_db_credentials(host=destination_host, database_name=destination_database)
+    # db_credentials = df_credentials[(df_credentials['database_name'] == destination_database) & (df_credentials['host'] == destination_host)]
 
     log.log_info(db_credentials)
 
