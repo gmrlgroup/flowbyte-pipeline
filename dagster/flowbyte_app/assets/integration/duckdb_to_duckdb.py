@@ -5,6 +5,7 @@ from flowbyte.sql import MSSQL
 import os
 import duckdb
 from flowbyte_app.partitions import duckdb_to_duckdb_partitions
+import platform
 
 
 import sys
@@ -46,24 +47,35 @@ def get_table_mapping_duckdb_duckdb(context):
     source_key = partition_key["source"]
     destination_key = partition_key["destination"]
 
-    # c:/duckdb/storage/sales_dataset/sales_line
-    source_host = "/".join(source_key.split("/")[:-2])
 
-    if 'file.core.windows.net' not in source_host:
-        source_host = source_host.replace('windows', ':')
-  
+    if platform.system() == "Windows":
+        # c:/duckdb/storage/sales_dataset/sales_line
+        source_host = "\\".join(source_key.split("\\")[:-2])
 
-    source_db = source_key.split("/")[-2]
-    table_name = source_key.split("/")[-1]
+        if 'file.core.windows.net' not in source_host:
+            source_host = source_host.replace('windows', ':')
+        source_host = source_host.replace('network\\backslash', '\\\\')
+    
+        source_db = source_key.split("\\")[-2]
+        table_name = source_key.split("\\")[-1]
 
+        destination_host = "\\".join(destination_key.split("\\")[:-2])
 
-    destination_host = "/".join(destination_key.split("/")[:-2])
+        if 'file.core.windows.net' not in destination_host:
+            destination_host = destination_host.replace('windows', ':')
+        destination_host = destination_host.replace('network\\backslash', '\\\\')
 
-    if 'file.core.windows.net' not in destination_host:
-        destination_host = destination_host.replace('windows', ':')
+        destination_db = destination_key.split("\\")[-2]
+        destination_table_name = destination_key.split("\\")[-1]
 
-    destination_db = destination_key.split("/")[-2]
-    destination_table_name = destination_key.split("/")[-1]
+    else: 
+        source_host = "/".join(source_key.split("/")[:-2])
+        source_db = source_key.split("/")[-2]
+        table_name = source_key.split("/")[-1]
+
+        destination_host = "/".join(destination_key.split("/")[:-2])
+        destination_db = destination_key.split("/")[-2]
+        destination_table_name = destination_key.split("/")[-1]
 
 
     sql_setup.connect()
@@ -128,22 +140,32 @@ def get_field_mapping_duckdb_duckdb(context):
     destination_key = partition_key["destination"]
 
 
-    source_host = "/".join(source_key.split("/")[:-2])
+    if platform.system() == "Windows":
+        source_host = "\\".join(source_key.split("\\")[:-2])
 
-    if 'file.core.windows.net' not in source_host:
-        source_host = source_host.replace('windows', ':')
+        if 'file.core.windows.net' not in source_host:
+            source_host = source_host.replace('windows', ':')
+        source_host = source_host.replace('network\\backslash', '\\\\')
+        source_db = source_key.split("\\")[-2]
+        table_name = source_key.split("\\")[-1]
 
-    source_db = source_key.split("/")[-2]
-    table_name = source_key.split("/")[-1]
 
+        destination_host = "\\".join(destination_key.split("\\")[:-2])
 
-    destination_host = "/".join(destination_key.split("/")[:-2])
+        if 'file.core.windows.net' not in destination_host:
+            destination_host = destination_host.replace('windows', ':')
+        destination_host = destination_host.replace('network\\backslash', '\\\\')
+        destination_db = destination_key.split("\\")[-2]
+        destination_table_name = destination_key.split("\\")[-1]
+    
+    else:
+        source_host = "/".join(source_key.split("/")[:-2])
+        source_db = source_key.split("/")[-2]
+        table_name = source_key.split("/")[-1]
 
-    if 'file.core.windows.net' not in destination_host:
-        destination_host = destination_host.replace('windows', ':')
-
-    destination_db = destination_key.split("/")[-2]
-    destination_table_name = destination_key.split("/")[-1]
+        destination_host = "/".join(destination_key.split("/")[:-2])
+        destination_db = destination_key.split("/")[-2]
+        destination_table_name = destination_key.split("/")[-1]
 
 
     sql_setup.connect()
@@ -219,19 +241,24 @@ def get_source_data_duckdb_duckdb(context, get_table_mapping_duckdb_duckdb, get_
     
     
     # get db credentials where database name is equal to the source database and host is equal to the source host
-    df_credentials = sql.get_db_credentials()
-    db_credentials_source = df_credentials[(df_credentials['database_name'] == source_database) & (df_credentials['host'] == source_host)]
-    db_credentials_dest = df_credentials[(df_credentials['database_name'] == destination_database) & (df_credentials['host'] == destination_host)]
+    db_credentials_source = sql.get_db_credentials(host=source_host, database_name=source_database)
+    db_credentials_dest = sql.get_db_credentials(host=destination_host, database_name=destination_database)
+
+    # db_credentials_source = df_credentials[(df_credentials['database_name'] == source_database) & (df_credentials['host'] == source_host)]
+    # db_credentials_dest = df_credentials[(df_credentials['database_name'] == destination_database) & (df_credentials['host'] == destination_host)]
     
 
     # sql_source = sql.init_sql(db_credentials_source)
     # sql_source.connect()
 
-    # replace cwindows to C:
-    if 'file.core.windows.net' not in source_host:
-        source_host = source_host.replace('windows', ':')
-    if 'file.core.windows.net' not in destination_host:
-        destination_host = destination_host.replace('windows', ':')
+    if platform.system() == "Windows":
+        # replace cwindows to C:
+        if 'file.core.windows.net' not in source_host:
+            source_host = source_host.replace('windows', ':')
+        source_host = source_host.replace('network\\backslash', '\\\\')
+        if 'file.core.windows.net' not in destination_host:
+            destination_host = destination_host.replace('windows', ':')
+        destination_host = destination_host.replace('network\\backslash', '\\\\')
 
     source_db = f"{source_host}/{source_database}.duckdb"
     destination_db = f"{destination_host}/{destination_database}.duckdb"
@@ -289,31 +316,7 @@ def get_source_data_duckdb_duckdb(context, get_table_mapping_duckdb_duckdb, get_
         log.log_debug(f"Query: {query}")
 
 
-    # object_columns = []
-    # float_columns = []
-    # integer_columns = []
-    # obcjec columns start with NVARCHAR
-    # object_columns = field_mapping[field_mapping['source_data_type'].str.contains('TEXT')]
-    # object_columns = object_columns['source_column'].tolist()
-
-    # # int columns contains INT
-    # integer_columns = field_mapping[field_mapping['source_data_type'].str.contains('INT')]
-    # integer_columns = integer_columns['source_column'].tolist()
-
-    # # float columns contains DECIMAL
-    # float_columns = field_mapping[field_mapping['source_data_type'].str.contains('DECIMAL')]
-    # float_columns = float_columns['source_column'].tolist()
-
-
-    # if env == "DEV":
-    #     log.log_debug(f"Object Columns: {object_columns}")
-    #     log.log_debug(f"Integer Columns: {integer_columns}")
-    #     log.log_debug(f"Float Columns: {float_columns}")
-
-        # log.log_debug(f"HOST: {sql_source.host}")
-        # log.log_debug(f"DATABASE: {sql_source.database}")
-
-    # df = sql_source.get_data(query, chunksize=100000, object_columns=object_columns, float_columns=float_columns, integer_columns=integer_columns, progress_callback=sql.print_progress, message="Extracted ")
+   
     df = source_con.execute(query).fetchdf()
     source_con.close()
     metadata = {
@@ -446,8 +449,8 @@ def add_destination_data_duckdb_duckdb(context, get_table_mapping_duckdb_duckdb,
     destination_host = table_mapping['destination_host'].iloc[0]
     destination_database = table_mapping['destination_database'].iloc[0]
 
-    df_credentials = sql.get_db_credentials()
-    db_credentials = df_credentials[(df_credentials['database_name'] == destination_database) & (df_credentials['host'] == destination_host)]
+    db_credentials = sql.get_db_credentials(host=destination_host, database_name=destination_database)
+    # db_credentials = df_credentials[(df_credentials['database_name'] == destination_database) & (df_credentials['host'] == destination_host)]
 
     log.log_info(db_credentials)
 
