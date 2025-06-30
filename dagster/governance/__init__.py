@@ -33,10 +33,10 @@ report_assets = load_assets_from_modules([report])
 
 ## GOVERNANCE JOBS ##
 mssql = define_asset_job(name="mssql", selection=["delete_governance_tables", "get_tables_details", "get_coulumns_details", "get_indexes_details", "get_table_storage_usage_details", "get_indexes_storage_usage_details", "load_governance_tables"])
+report_logs_job = define_asset_job(name="report_logs_job", selection=["delete_pbi_report_logs", "get_pbi_report_logs", "transform_pbi_report_logs", "load_pbi_report_logs","date_range_asset"])
 
 
-report_logs_job = define_asset_job(name="report_logs_job", selection=["delete_pbi_report_logs", "get_pbi_report_logs", "transform_pbi_report_logs", "load_pbi_report_logs"])
-# List all active sensors
+# List all active sensors   
 sensors = [ 
     # add the sensors
 ]
@@ -57,5 +57,3 @@ defs = Definitions(
         "parquet_io_manager": models.PandasParquetIOManager(),
     }
 )
-
-
