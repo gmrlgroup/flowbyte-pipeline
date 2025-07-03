@@ -13,9 +13,9 @@ from dagster import (
 
 from governance.assets import database, report
 from governance.sensors import notification_sensors as ns
-from governance.schedules import mssql_schedule
+from governance.schedules import *
 from governance.partitions import db_to_db_partitions
-import os 
+import os
 
 import sys
 sys.path.append('..')
@@ -51,7 +51,7 @@ defs = Definitions(
             mssql,
             report_logs_job
         ],
-    schedules = [mssql_schedule ],
+    schedules = [mssql_schedule, report_logs_schedule],
     sensors = sensors ,
     resources={
         "parquet_io_manager": models.PandasParquetIOManager(),

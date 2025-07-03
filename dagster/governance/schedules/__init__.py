@@ -24,7 +24,10 @@ def mssql_schedule(context):
         for key in partition_keys #db_to_db_partitions.get_partition_keys()
     ]
 
-
-
-
-
+#Schedule for report_logs @4am
+report_logs_schedule = ScheduleDefinition(
+    name='report_logs_schedule',                        
+    job_name='report_logs_job',
+    cron_schedule="0 4 * * *",  # Run at 4:00 AM every day
+    execution_timezone="Asia/Beirut"
+)
