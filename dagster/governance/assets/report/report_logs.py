@@ -101,7 +101,7 @@ def get_pbi_report_logs(date_range_asset: tuple[str, str]):
     }
 
     today_0 = end_date.replace(hour=0, minute=0, second=0, microsecond=0)
-    end_date_dt = today_0 - timedelta(days=END_DATE_OFFSET)
+    end_date_dt = end_date
     cutoff_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0) #end_date_dt - timedelta(days=ROLLING_DAYS - 1)
 
     start_date_dt = max(cutoff_date, START_DATE_FIXED)
