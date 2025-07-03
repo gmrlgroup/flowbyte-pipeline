@@ -200,8 +200,11 @@ def load_pbi_report_logs(transform_pbi_report_logs, date_range_asset: tuple[str,
     con = duckdb.connect(database=FILE_PATH, read_only=False)
     df = transform_pbi_report_logs
     con.register("df", df)
-    #con.execute("CREATE OR REPLACE TEMP VIEW df AS SELECT * FROM df")
+    log.log_info(end_date)
 
+    #con.execute("CREATE OR REPLACE TEMP VIEW df AS SELECT * FROM df")
+    end_date_exclusive = (datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+    
     query = f"""
         INSERT INTO main.user_telemetry (
             timestamp,
@@ -217,7 +220,7 @@ def load_pbi_report_logs(transform_pbi_report_logs, date_range_asset: tuple[str,
         )
         SELECT *
         FROM df
-        WHERE timestamp BETWEEN '{start_date}' AND '{end_date}'
+        WHERE timestamp >= '{start_date}' AND timestamp <= '{end_date_exclusive}'
     """
     log.log_info(query)
     con.execute(query)
